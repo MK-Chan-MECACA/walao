@@ -18,6 +18,7 @@ import {
   disconnectConnection,
   listConnections,
 } from "./connections.ts";
+import { getRetentionDays, setRetentionDays } from "./retention.ts";
 
 export type App = {
   handler: (req: IncomingMessage, res: ServerResponse) => void;
@@ -73,6 +74,29 @@ export function createApp(deps: { pool: pg.Pool; gateway: GatewayPort; config: C
 
       if (req.method === "GET" && url.pathname === "/v1/disclosure-template") {
         send(res, 200, DISCLOSURE_TEMPLATE);
+        return;
+      }
+
+      if (req.method === "GET" && url.pathname === "/v1/retention") {
+        send(res, 200, { retention_days: await getRetentionDays(pool, userId) });
+        return;
+      }
+
+      if (req.method === "PUT" && url.pathname === "/v1/retention") {
+        let body: unknown = {};
+        try {
+          body = JSON.parse((await readRawBody(req)).toString("utf8") || "{}");
+        } catch {
+          send(res, 400, { error: "bad_json" });
+          return;
+        }
+        const days = (body as Record<string, unknown>).retention_days;
+        const result = await setRetentionDays(pool, userId, days);
+        if (result === "invalid") {
+          send(res, 400, { error: "invalid_retention_days" });
+          return;
+        }
+        send(res, 200, { retention_days: result });
         return;
       }
 

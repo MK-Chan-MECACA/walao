@@ -83,11 +83,13 @@ async function processEvent(
   const ciphertext = encrypt(evt.text, config.encKey);
 
   // Idempotent store: a replayed event that slipped past the ingress dedup still
-  // cannot create a second row.
+  // cannot create a second row. Expiry is stamped at store time from the owning
+  // user's current retention setting (ticket 4).
   const res = await client.query(
     `INSERT INTO messages
-       (user_id, session_id, group_id, external_id, sender_ref, sent_at, body_ciphertext)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)
+       (user_id, session_id, group_id, external_id, sender_ref, sent_at, body_ciphertext, expires_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7,
+             now() + make_interval(days => (SELECT retention_days FROM users WHERE id = $1)))
      ON CONFLICT (session_id, external_id) DO NOTHING`,
     [userId, sessionId, groupId, evt.externalMessageId, evt.senderRef, evt.sentAt, ciphertext],
   );
