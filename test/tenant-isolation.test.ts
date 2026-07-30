@@ -20,8 +20,9 @@ test("a second user can never read the first user's message", async () => {
   const bob = "tok-bob";
   const aliceId = await h.seedUser(alice);
   const bobId = await h.seedUser(bob);
-  await h.seedSession(aliceId, "sess-alice");
+  const aliceSession = await h.seedSession(aliceId, "sess-alice");
   await h.seedSession(bobId, "sess-bob");
+  await h.seedGroup(aliceSession, "group-1@g.us");
 
   // Alice's message arrives on her session.
   await h.postWebhook(buildEvent({ session: "sess-alice", id: "a1", text: "alice secret" }));

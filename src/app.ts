@@ -5,6 +5,13 @@ import type { Config } from "./config.ts";
 import { ingestWebhook } from "./ingest.ts";
 import { drainQueue } from "./consumer.ts";
 import { authenticate, listMessages } from "./api.ts";
+import {
+  DISCLOSURE_TEMPLATE,
+  disableGroup,
+  enableGroup,
+  listConsentRecords,
+  listGroups,
+} from "./subscriptions.ts";
 
 export type App = {
   handler: (req: IncomingMessage, res: ServerResponse) => void;
@@ -35,14 +42,62 @@ export function createApp(deps: { pool: pg.Pool; gateway: GatewayPort; config: C
       return;
     }
 
-    if (req.method === "GET" && url.pathname === "/v1/messages") {
+    // Everything under /v1 is authenticated and tenant-scoped.
+    if (url.pathname.startsWith("/v1/")) {
       const userId = await authenticate(pool, bearer(req));
       if (!userId) {
         send(res, 401, { error: "unauthorized" });
         return;
       }
-      send(res, 200, { messages: await listMessages(pool, config, userId) });
-      return;
+
+      if (req.method === "GET" && url.pathname === "/v1/messages") {
+        send(res, 200, { messages: await listMessages(pool, config, userId) });
+        return;
+      }
+
+      if (req.method === "GET" && url.pathname === "/v1/groups") {
+        send(res, 200, { groups: await listGroups(pool, userId) });
+        return;
+      }
+
+      if (req.method === "GET" && url.pathname === "/v1/consent-records") {
+        send(res, 200, { records: await listConsentRecords(pool, userId) });
+        return;
+      }
+
+      if (req.method === "GET" && url.pathname === "/v1/disclosure-template") {
+        send(res, 200, DISCLOSURE_TEMPLATE);
+        return;
+      }
+
+      const toggle = url.pathname.match(/^\/v1\/groups\/([0-9a-f-]{36})\/(enable|disable)$/);
+      if (req.method === "POST" && toggle) {
+        const [, groupId, action] = toggle;
+        let result;
+        if (action === "enable") {
+          let body: unknown = {};
+          try {
+            body = JSON.parse((await readRawBody(req)).toString("utf8") || "{}");
+          } catch {
+            send(res, 400, { error: "bad_json" });
+            return;
+          }
+          const version = (body as Record<string, unknown>).attestation_version;
+          result = await enableGroup(pool, userId, groupId, version);
+        } else {
+          result = await disableGroup(pool, userId, groupId);
+        }
+        if (result === "attestation_required") {
+          send(res, 400, { error: "attestation_required" });
+          return;
+        }
+        if (result === "not_found") {
+          send(res, 404, { error: "not_found" });
+          return;
+        }
+        send(res, 200, { ok: true });
+        return;
+      }
     }
 
     send(res, 404, { error: "not_found" });

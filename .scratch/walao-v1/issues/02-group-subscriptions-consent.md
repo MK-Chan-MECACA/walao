@@ -4,10 +4,10 @@
 
 **Blocked by:** 01 — Walking skeleton.
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Groups are listable per user; all disabled by default
-- [ ] Enabling a group records a consent attestation event with version and timestamp; the audit trail is queryable
-- [ ] A webhook event for a disabled group is dropped before processing and never stored (zero-tolerance test: unauthorized groups processed = 0)
-- [ ] Disabling a previously enabled group immediately stops new messages from being stored
-- [ ] Disclosure template is retrievable for the user to post; posting it is optional
+- [x] Groups are listable per user; all disabled by default
+- [x] Enabling a group records a consent attestation event with version and timestamp; the audit trail is queryable
+- [x] A webhook event for a disabled group is dropped before processing and never stored (zero-tolerance test: unauthorized groups processed = 0)
+- [x] Disabling a previously enabled group immediately stops new messages from being stored
+- [x] Disclosure template is retrievable for the user to post; posting it is optional

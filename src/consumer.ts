@@ -67,17 +67,14 @@ async function processEvent(
   if (session.rows.length === 0) return false;
   const { id: sessionId, user_id: userId } = session.rows[0];
 
-  // Upsert the group within the session.
-  await client.query(
-    `INSERT INTO groups (session_id, external_jid, name)
-     VALUES ($1, $2, $3)
-     ON CONFLICT (session_id, external_jid) DO NOTHING`,
-    [sessionId, evt.groupJid, evt.groupName],
-  );
+  // Store-time consent guard: ingress already drops disabled groups, but an
+  // event enqueued while enabled can still be pending when the user disables —
+  // "disable stops new messages immediately" means it must be skipped here too.
   const group = await client.query(
-    `SELECT id FROM groups WHERE session_id = $1 AND external_jid = $2`,
+    `SELECT id, enabled FROM groups WHERE session_id = $1 AND external_jid = $2`,
     [sessionId, evt.groupJid],
   );
+  if (group.rows.length === 0 || !group.rows[0].enabled) return false;
   const groupId = group.rows[0].id;
 
   const ciphertext = encrypt(evt.text, config.encKey);

@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import pg from "pg";
@@ -10,12 +10,12 @@ export function createPool(databaseUrl: string): pg.Pool {
   return new Pool({ connectionString: databaseUrl });
 }
 
-// Apply the single init migration. Idempotent (IF NOT EXISTS everywhere), so
-// running it on every boot is fine for a walking skeleton — no migration
-// framework until we have more than one migration to order.
-// ponytail: single-file migration, add a migrations runner when count > a few.
+// Apply all migrations in filename order. Every migration is idempotent
+// (IF NOT EXISTS everywhere), so running the full set on every boot is fine.
+// ponytail: no applied-migrations ledger; add one when a migration stops being idempotent.
 export async function migrate(pool: pg.Pool): Promise<void> {
-  const here = dirname(fileURLToPath(import.meta.url));
-  const sql = readFileSync(join(here, "..", "migrations", "001_init.sql"), "utf8");
-  await pool.query(sql);
+  const dir = join(dirname(fileURLToPath(import.meta.url)), "..", "migrations");
+  for (const file of readdirSync(dir).filter((f) => f.endsWith(".sql")).sort()) {
+    await pool.query(readFileSync(join(dir, file), "utf8"));
+  }
 }

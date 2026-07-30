@@ -17,7 +17,8 @@ beforeEach(async () => {
 test("valid event becomes an encrypted message visible via the API for its owner", async () => {
   const token = "tok-alice";
   const userId = await h.seedUser(token);
-  await h.seedSession(userId, "sess-1");
+  const sessionId = await h.seedSession(userId, "sess-1");
+  await h.seedGroup(sessionId, "group-1@g.us");
 
   assert.equal(await h.postWebhook(buildEvent({ text: "Approved the RM500 order" })), 202);
   assert.equal(await h.drain(), 1);
@@ -37,7 +38,8 @@ test("valid event becomes an encrypted message visible via the API for its owner
 
 test("forged HMAC is rejected and leaves no trace", async () => {
   const userId = await h.seedUser("tok");
-  await h.seedSession(userId, "sess-1");
+  const sessionId = await h.seedSession(userId, "sess-1");
+  await h.seedGroup(sessionId, "group-1@g.us");
 
   assert.equal(await h.postWebhook(buildEvent(), { signature: "deadbeef" }), 401);
   assert.equal(await countIngestEvents(h.pool), 0);
@@ -46,7 +48,8 @@ test("forged HMAC is rejected and leaves no trace", async () => {
 
 test("stale event (outside freshness window) is rejected and leaves no trace", async () => {
   const userId = await h.seedUser("tok");
-  await h.seedSession(userId, "sess-1");
+  const sessionId = await h.seedSession(userId, "sess-1");
+  await h.seedGroup(sessionId, "group-1@g.us");
 
   const stale = buildEvent({ sentAt: new Date(Date.now() - 3600_000).toISOString() });
   assert.equal(await h.postWebhook(stale), 400);
@@ -56,7 +59,8 @@ test("stale event (outside freshness window) is rejected and leaves no trace", a
 test("replayed event (duplicate session+id) is idempotent — no double store", async () => {
   const token = "tok";
   const userId = await h.seedUser(token);
-  await h.seedSession(userId, "sess-1");
+  const sessionId = await h.seedSession(userId, "sess-1");
+  await h.seedGroup(sessionId, "group-1@g.us");
 
   const evt = buildEvent({ id: "msg-dup" });
   assert.equal(await h.postWebhook(evt), 202);
@@ -75,7 +79,8 @@ test("replayed event (duplicate session+id) is idempotent — no double store", 
 test("ingestion survives a consumer restart without losing the event", async () => {
   const token = "tok";
   const userId = await h.seedUser(token);
-  await h.seedSession(userId, "sess-1");
+  const sessionId = await h.seedSession(userId, "sess-1");
+  await h.seedGroup(sessionId, "group-1@g.us");
 
   // Enqueue but do NOT drain — simulates the consumer being down.
   assert.equal(await h.postWebhook(buildEvent({ id: "msg-durable" })), 202);

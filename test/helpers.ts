@@ -71,8 +71,15 @@ export type Harness = {
   postWebhook: (event: unknown, opts?: { signature?: string }) => Promise<number>;
   getMessages: (token: string) => Promise<{ status: number; messages: unknown[] }>;
   drain: () => Promise<number>;
+  api: (
+    token: string,
+    method: string,
+    path: string,
+    body?: unknown,
+  ) => Promise<{ status: number; body: unknown }>;
   seedUser: (token: string) => Promise<string>;
   seedSession: (userId: string, externalSessionId: string) => Promise<string>;
+  seedGroup: (sessionId: string, externalJid: string, enabled?: boolean) => Promise<string>;
   reset: () => Promise<void>;
   close: () => Promise<void>;
 };
@@ -110,6 +117,17 @@ export async function makeHarness(): Promise<Harness> {
       return { status: res.status, messages: body.messages };
     },
     drain: () => app.drain(),
+    async api(token, method, path, body) {
+      const res = await fetch(`${baseUrl}${path}`, {
+        method,
+        headers: {
+          authorization: `Bearer ${token}`,
+          ...(body !== undefined ? { "content-type": "application/json" } : {}),
+        },
+        body: body !== undefined ? JSON.stringify(body) : undefined,
+      });
+      return { status: res.status, body: await res.json().catch(() => null) };
+    },
     async seedUser(token) {
       const { rows } = await pool.query(
         `INSERT INTO users (api_token_sha256) VALUES ($1) RETURNING id`,
@@ -124,9 +142,16 @@ export async function makeHarness(): Promise<Harness> {
       );
       return rows[0].id;
     },
+    async seedGroup(sessionId, externalJid, enabled = true) {
+      const { rows } = await pool.query(
+        `INSERT INTO groups (session_id, external_jid, enabled) VALUES ($1, $2, $3) RETURNING id`,
+        [sessionId, externalJid, enabled],
+      );
+      return rows[0].id;
+    },
     async reset() {
       await pool.query(
-        `TRUNCATE messages, groups, whatsapp_sessions, users, ingest_events RESTART IDENTITY CASCADE`,
+        `TRUNCATE messages, consent_records, groups, whatsapp_sessions, users, ingest_events RESTART IDENTITY CASCADE`,
       );
     },
     async close() {
