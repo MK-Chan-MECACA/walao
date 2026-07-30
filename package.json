@@ -1,0 +1,21 @@
+{
+  "name": "walao",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "WALAO — personal AI information layer for WhatsApp (ticket 1: ingestion walking skeleton)",
+  "engines": { "node": ">=24" },
+  "scripts": {
+    "start": "node src/server.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test --test-concurrency=1"
+  },
+  "dependencies": {
+    "pg": "^8.13.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/pg": "^8.11.10",
+    "typescript": "^5.7.0"
+  }
+}

@@ -1,0 +1,11 @@
+# Optional: a local Postgres for dev/tests. `docker compose up -d`
+# then DATABASE_URL=postgres://walao:walao@localhost:5432/walao
+services:
+  postgres:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: walao
+      POSTGRES_PASSWORD: walao
+      POSTGRES_DB: walao
+    ports:
+      - "5432:5432"
