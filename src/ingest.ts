@@ -42,6 +42,12 @@ export async function ingestWebhook(
     return { status: 202 };
   }
 
+  // Loop prevention (ticket 7): WALAO's own delivered messages echo back from
+  // the gateway as from_me events. They are dropped HERE, before any write, so
+  // a brief can never re-enter the pipeline it came from. Silent 202 like the
+  // other drops.
+  if (evt.fromMe) return { status: 202 };
+
   const ageSeconds = Math.abs((Date.now() - evt.sentAt.getTime()) / 1000);
   if (!Number.isFinite(ageSeconds) || ageSeconds > config.freshnessSeconds) return { status: 400 };
 

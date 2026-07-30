@@ -1,6 +1,7 @@
 -- WALAO ticket 6: summaries with citation contract + per-summary metrics.
 -- from_me marks the gateway's own system echoes so processing can exclude them
--- (spec §45) while the raw store still keeps the full record.
+-- (spec §45). Since ticket 7, echoes are dropped at ingress; the column stays
+-- as a store-level backstop for rows that predate that guard.
 
 ALTER TABLE messages ADD COLUMN IF NOT EXISTS from_me boolean NOT NULL DEFAULT false;
 

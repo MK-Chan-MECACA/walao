@@ -33,4 +33,9 @@ export interface GatewayPort {
   // Begin pairing a new WhatsApp account. Returns the provider session id the
   // gateway will use in webhooks plus the code/QR the user completes pairing with.
   startPairing(): Promise<{ externalSessionId: string; pairingCode: string }>;
+
+  // Tier 0 outbound: deliver text to the session owner's own "Message Yourself"
+  // chat. Deliberately takes NO recipient — the port cannot express a send to a
+  // group JID or anyone else, so the Tier 0 boundary (spec §46) is structural.
+  sendToSelf(externalSessionId: string, text: string): Promise<void>;
 }

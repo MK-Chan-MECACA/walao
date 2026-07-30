@@ -49,4 +49,10 @@ export class WaapiGateway implements GatewayPort {
   startPairing(): Promise<{ externalSessionId: string; pairingCode: string }> {
     return Promise.reject(new Error("WAAPI pairing not implemented"));
   }
+
+  // ponytail: needs the WAAPI REST client (send to the session's own JID);
+  // wire it when a real gateway is provisioned. FakeGateway covers ticket 7.
+  sendToSelf(): Promise<void> {
+    return Promise.reject(new Error("WAAPI sendToSelf not implemented"));
+  }
 }

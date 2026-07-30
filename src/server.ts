@@ -5,6 +5,7 @@ import { createApp } from "./app.ts";
 import { WaapiGateway } from "./gateway/waapi.ts";
 import { purgeExpired } from "./retention.ts";
 import { tickScheduler } from "./scheduler.ts";
+import { deliverSummaries } from "./deliver.ts";
 
 // Real entrypoint. Boots the schema, serves the webhook + API, and drains the
 // queue on a simple interval. A single-process poll loop is enough for the
@@ -15,7 +16,8 @@ async function main(): Promise<void> {
   const pool = createPool(config.databaseUrl);
   await migrate(pool);
 
-  const app = createApp({ pool, gateway: new WaapiGateway(), config });
+  const gateway = new WaapiGateway();
+  const app = createApp({ pool, gateway, config });
 
   const timer = setInterval(() => {
     app.drain().catch((err) => console.error("drain error", err));
@@ -23,6 +25,7 @@ async function main(): Promise<void> {
     // slower timer if the delete scan ever shows up in load.
     purgeExpired(pool).catch((err) => console.error("purge error", err));
     tickScheduler(pool).catch((err) => console.error("scheduler error", err));
+    deliverSummaries(pool, gateway).catch((err) => console.error("delivery error", err));
   }, 1000);
   timer.unref();
 

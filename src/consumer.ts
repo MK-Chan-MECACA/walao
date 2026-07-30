@@ -59,6 +59,10 @@ async function processEvent(
   const evt = gateway.parse(payload);
   if (evt.type !== "message") return false;
 
+  // Loop-prevention mirror of the ingress guard (ticket 7): a from_me echo
+  // already queued before the guard shipped must be skipped here too.
+  if (evt.fromMe) return false;
+
   // Resolve session -> owning user (tenant). Unknown session => skip: we can't
   // attribute the message to a tenant, and unattributed data must not be stored.
   // Status guard mirrors the ingress one: "disconnect stops ingestion

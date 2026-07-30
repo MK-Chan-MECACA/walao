@@ -12,6 +12,7 @@ import {
   type SummarizerPort,
   type SummarizerResult,
 } from "../src/summarize.ts";
+import { deliverSummaries } from "../src/deliver.ts";
 
 export const WEBHOOK_SECRET = "test-secret";
 
@@ -29,6 +30,9 @@ export function testConfig(): Config {
 // on any real provider's wire shape. Real HMAC ingress still runs.
 export class FakeGateway implements GatewayPort {
   private pairCount = 0;
+  // Every outbound send, captured for assertions. The only routing datum the
+  // port allows is the session id — the Tier 0 boundary tests rely on that.
+  sends: { sessionExternalId: string; text: string }[] = [];
 
   parse(payload: unknown): GatewayEvent {
     const p = payload as Record<string, unknown>;
@@ -56,6 +60,10 @@ export class FakeGateway implements GatewayPort {
   async startPairing(): Promise<{ externalSessionId: string; pairingCode: string }> {
     this.pairCount++;
     return { externalSessionId: `fake-sess-${this.pairCount}`, pairingCode: "FAKE-1234" };
+  }
+
+  async sendToSelf(sessionExternalId: string, text: string): Promise<void> {
+    this.sends.push({ sessionExternalId, text });
   }
 }
 
@@ -127,8 +135,10 @@ export type Harness = {
     sentAt: string,
     opts?: { text?: string; fromMe?: boolean },
   ) => Promise<string>;
+  gateway: FakeGateway;
   summarizer: FakeSummarizer;
   summarize: () => Promise<number>;
+  deliver: () => Promise<number>;
   reset: () => Promise<void>;
   close: () => Promise<void>;
 };
@@ -137,7 +147,8 @@ export async function makeHarness(): Promise<Harness> {
   const config = testConfig();
   const pool = createPool(config.databaseUrl);
   await migrate(pool);
-  const app = createApp({ pool, gateway: new FakeGateway(), config });
+  const gateway = new FakeGateway();
+  const app = createApp({ pool, gateway, config });
   const summarizer = new FakeSummarizer();
   const server: Server = createServer(app.handler);
   await new Promise<void>((resolve) => server.listen(0, resolve));
@@ -214,9 +225,12 @@ export async function makeHarness(): Promise<Harness> {
       );
       return rows[0].id;
     },
+    gateway,
     summarizer,
     summarize: () => processSummaryJobs(pool, summarizer, config),
+    deliver: () => deliverSummaries(pool, gateway),
     async reset() {
+      gateway.sends = [];
       summarizer.canned = {};
       summarizer.calls = [];
       summarizer.fail = false;
