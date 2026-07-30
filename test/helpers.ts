@@ -6,6 +6,12 @@ import { createApp } from "../src/app.ts";
 import { signHmac, hashToken, encrypt } from "../src/crypto.ts";
 import type { Config } from "../src/config.ts";
 import type { GatewayEvent, GatewayPort, SessionStatus } from "../src/gateway/port.ts";
+import {
+  processSummaryJobs,
+  type SummarizerInput,
+  type SummarizerPort,
+  type SummarizerResult,
+} from "../src/summarize.ts";
 
 export const WEBHOOK_SECRET = "test-secret";
 
@@ -53,6 +59,26 @@ export class FakeGateway implements GatewayPort {
   }
 }
 
+// Fake SummarizerPort — the AI-pipeline test seam: canned structured JSON out,
+// every received input recorded so tests can assert on what the model was fed.
+export class FakeSummarizer implements SummarizerPort {
+  canned: unknown = {};
+  calls: SummarizerInput[] = [];
+  fail = false;
+
+  async summarize(input: SummarizerInput): Promise<SummarizerResult> {
+    this.calls.push(input);
+    if (this.fail) throw new Error("summarizer unavailable");
+    return {
+      output: this.canned,
+      model: "fake-model-1",
+      promptVersion: "test-v1",
+      inputTokens: 10,
+      outputTokens: 5,
+    };
+  }
+}
+
 export type SyntheticEvent = {
   kind: "message";
   session: string;
@@ -95,7 +121,14 @@ export type Harness = {
   seedUser: (token: string) => Promise<string>;
   seedSession: (userId: string, externalSessionId: string) => Promise<string>;
   seedGroup: (sessionId: string, externalJid: string, enabled?: boolean) => Promise<string>;
-  seedMessage: (groupId: string, externalId: string, sentAt: string) => Promise<void>;
+  seedMessage: (
+    groupId: string,
+    externalId: string,
+    sentAt: string,
+    opts?: { text?: string; fromMe?: boolean },
+  ) => Promise<string>;
+  summarizer: FakeSummarizer;
+  summarize: () => Promise<number>;
   reset: () => Promise<void>;
   close: () => Promise<void>;
 };
@@ -105,6 +138,7 @@ export async function makeHarness(): Promise<Harness> {
   const pool = createPool(config.databaseUrl);
   await migrate(pool);
   const app = createApp({ pool, gateway: new FakeGateway(), config });
+  const summarizer = new FakeSummarizer();
   const server: Server = createServer(app.handler);
   await new Promise<void>((resolve) => server.listen(0, resolve));
   const { port } = server.address() as AddressInfo;
@@ -165,21 +199,29 @@ export async function makeHarness(): Promise<Harness> {
       );
       return rows[0].id;
     },
-    // Store a message directly with a controlled sent_at — for scheduler tests,
-    // whose timelines sit outside the webhook freshness window by design.
-    async seedMessage(groupId, externalId, sentAt) {
-      await pool.query(
+    // Store a message directly with a controlled sent_at — for scheduler and
+    // summary tests, whose timelines sit outside the webhook freshness window
+    // by design. Returns the message id so canned summaries can cite it.
+    async seedMessage(groupId, externalId, sentAt, opts) {
+      const { rows } = await pool.query(
         `INSERT INTO messages
-           (user_id, session_id, group_id, external_id, sent_at, body_ciphertext, expires_at)
-         SELECT s.user_id, g.session_id, g.id, $2, $3, $4, $3::timestamptz + interval '30 days'
+           (user_id, session_id, group_id, external_id, sent_at, from_me, body_ciphertext, expires_at)
+         SELECT s.user_id, g.session_id, g.id, $2, $3, $5, $4, $3::timestamptz + interval '30 days'
          FROM groups g JOIN whatsapp_sessions s ON s.id = g.session_id
-         WHERE g.id = $1`,
-        [groupId, externalId, sentAt, encrypt("seeded", config.encKey)],
+         WHERE g.id = $1
+         RETURNING id`,
+        [groupId, externalId, sentAt, encrypt(opts?.text ?? "seeded", config.encKey), opts?.fromMe ?? false],
       );
+      return rows[0].id;
     },
+    summarizer,
+    summarize: () => processSummaryJobs(pool, summarizer, config),
     async reset() {
+      summarizer.canned = {};
+      summarizer.calls = [];
+      summarizer.fail = false;
       await pool.query(
-        `TRUNCATE messages, summary_jobs, summary_schedules, consent_records, coverage_gaps, groups, whatsapp_sessions, users, ingest_events RESTART IDENTITY CASCADE`,
+        `TRUNCATE messages, summaries, summary_jobs, summary_schedules, consent_records, coverage_gaps, groups, whatsapp_sessions, users, ingest_events RESTART IDENTITY CASCADE`,
       );
     },
     async close() {

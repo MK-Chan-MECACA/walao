@@ -87,11 +87,11 @@ async function processEvent(
   // user's current retention setting (ticket 4).
   const res = await client.query(
     `INSERT INTO messages
-       (user_id, session_id, group_id, external_id, sender_ref, sent_at, body_ciphertext, expires_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7,
+       (user_id, session_id, group_id, external_id, sender_ref, sent_at, from_me, body_ciphertext, expires_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8,
              now() + make_interval(days => (SELECT retention_days FROM users WHERE id = $1)))
      ON CONFLICT (session_id, external_id) DO NOTHING`,
-    [userId, sessionId, groupId, evt.externalMessageId, evt.senderRef, evt.sentAt, ciphertext],
+    [userId, sessionId, groupId, evt.externalMessageId, evt.senderRef, evt.sentAt, evt.fromMe, ciphertext],
   );
   return (res.rowCount ?? 0) > 0;
 }
