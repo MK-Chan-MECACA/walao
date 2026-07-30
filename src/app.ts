@@ -12,6 +12,12 @@ import {
   listConsentRecords,
   listGroups,
 } from "./subscriptions.ts";
+import {
+  ONBOARDING_DISCLOSURE,
+  createConnection,
+  disconnectConnection,
+  listConnections,
+} from "./connections.ts";
 
 export type App = {
   handler: (req: IncomingMessage, res: ServerResponse) => void;
@@ -67,6 +73,45 @@ export function createApp(deps: { pool: pg.Pool; gateway: GatewayPort; config: C
 
       if (req.method === "GET" && url.pathname === "/v1/disclosure-template") {
         send(res, 200, DISCLOSURE_TEMPLATE);
+        return;
+      }
+
+      if (req.method === "GET" && url.pathname === "/v1/onboarding") {
+        send(res, 200, ONBOARDING_DISCLOSURE);
+        return;
+      }
+
+      if (req.method === "GET" && url.pathname === "/v1/connections") {
+        send(res, 200, { connections: await listConnections(pool, userId) });
+        return;
+      }
+
+      if (req.method === "POST" && url.pathname === "/v1/connections") {
+        let body: unknown = {};
+        try {
+          body = JSON.parse((await readRawBody(req)).toString("utf8") || "{}");
+        } catch {
+          send(res, 400, { error: "bad_json" });
+          return;
+        }
+        const version = (body as Record<string, unknown>).disclosure_version;
+        const result = await createConnection(pool, gateway, userId, version);
+        if (result === "disclosure_required") {
+          send(res, 400, { error: "disclosure_required" });
+          return;
+        }
+        send(res, 201, result);
+        return;
+      }
+
+      const disconnect = url.pathname.match(/^\/v1\/connections\/([0-9a-f-]{36})\/disconnect$/);
+      if (req.method === "POST" && disconnect) {
+        const result = await disconnectConnection(pool, userId, disconnect[1]);
+        if (result === "not_found") {
+          send(res, 404, { error: "not_found" });
+          return;
+        }
+        send(res, 200, { ok: true });
         return;
       }
 

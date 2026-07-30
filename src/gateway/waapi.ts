@@ -21,6 +21,8 @@ function str(v: unknown, field: string): string {
 export class WaapiGateway implements GatewayPort {
   parse(payload: unknown): NormalizedEvent {
     const root = asRecord(payload);
+    // ponytail: only message events mapped; add WAAPI session-status event
+    // mapping once its wire shape is verified against a live gateway.
     if (root.event !== "message") throw new Error(`unsupported event: ${String(root.event)}`);
     const sessionExternalId = str(root.session, "session");
     const msg = asRecord(root.payload);
@@ -30,6 +32,7 @@ export class WaapiGateway implements GatewayPort {
     if (typeof ts !== "number" || !Number.isFinite(ts)) throw new Error("missing/invalid timestamp");
 
     return {
+      type: "message",
       sessionExternalId,
       groupJid: str(msg.chatId, "chatId"),
       groupName: typeof msg.chatName === "string" ? msg.chatName : null,
@@ -39,5 +42,11 @@ export class WaapiGateway implements GatewayPort {
       sentAt: new Date(ts * 1000),
       fromMe: msg.fromMe === true,
     };
+  }
+
+  // ponytail: needs the WAAPI REST client (create session + fetch QR/code);
+  // wire it when a real gateway is provisioned. FakeGateway covers ticket 3.
+  startPairing(): Promise<{ externalSessionId: string; pairingCode: string }> {
+    return Promise.reject(new Error("WAAPI pairing not implemented"));
   }
 }

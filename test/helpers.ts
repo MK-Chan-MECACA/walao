@@ -5,7 +5,7 @@ import { createPool, migrate, type Pool } from "../src/db.ts";
 import { createApp } from "../src/app.ts";
 import { signHmac, hashToken } from "../src/crypto.ts";
 import type { Config } from "../src/config.ts";
-import type { GatewayPort, NormalizedEvent } from "../src/gateway/port.ts";
+import type { GatewayEvent, GatewayPort, SessionStatus } from "../src/gateway/port.ts";
 
 export const WEBHOOK_SECRET = "test-secret";
 
@@ -22,10 +22,20 @@ export function testConfig(): Config {
 // Fake GatewayPort: understands a simple synthetic payload so tests never depend
 // on any real provider's wire shape. Real HMAC ingress still runs.
 export class FakeGateway implements GatewayPort {
-  parse(payload: unknown): NormalizedEvent {
+  private pairCount = 0;
+
+  parse(payload: unknown): GatewayEvent {
     const p = payload as Record<string, unknown>;
+    if (p.kind === "status") {
+      return {
+        type: "status",
+        sessionExternalId: String(p.session),
+        status: p.status as SessionStatus,
+      };
+    }
     if (p.kind !== "message") throw new Error("not a message");
     return {
+      type: "message",
       sessionExternalId: String(p.session),
       groupJid: String(p.chatId),
       groupName: (p.chatName as string) ?? null,
@@ -35,6 +45,11 @@ export class FakeGateway implements GatewayPort {
       sentAt: new Date(p.sentAt as string),
       fromMe: p.fromMe === true,
     };
+  }
+
+  async startPairing(): Promise<{ externalSessionId: string; pairingCode: string }> {
+    this.pairCount++;
+    return { externalSessionId: `fake-sess-${this.pairCount}`, pairingCode: "FAKE-1234" };
   }
 }
 
@@ -151,7 +166,7 @@ export async function makeHarness(): Promise<Harness> {
     },
     async reset() {
       await pool.query(
-        `TRUNCATE messages, consent_records, groups, whatsapp_sessions, users, ingest_events RESTART IDENTITY CASCADE`,
+        `TRUNCATE messages, consent_records, coverage_gaps, groups, whatsapp_sessions, users, ingest_events RESTART IDENTITY CASCADE`,
       );
     },
     async close() {

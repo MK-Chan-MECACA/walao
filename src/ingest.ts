@@ -2,6 +2,7 @@ import type pg from "pg";
 import type { GatewayPort } from "./gateway/port.ts";
 import type { Config } from "./config.ts";
 import { verifyHmac } from "./crypto.ts";
+import { applyGatewayStatus } from "./connections.ts";
 
 export type IngestResult =
   | { status: 202 } // accepted (or idempotent replay — both are 202, no trace difference)
@@ -34,6 +35,13 @@ export async function ingestWebhook(
     return { status: 400 };
   }
 
+  // Session status changes (ticket 3) are state updates, not data — applied
+  // directly, no queue. Unknown sessions are ignored inside.
+  if (evt.type === "status") {
+    await applyGatewayStatus(pool, evt);
+    return { status: 202 };
+  }
+
   const ageSeconds = Math.abs((Date.now() - evt.sentAt.getTime()) / 1000);
   if (!Number.isFinite(ageSeconds) || ageSeconds > config.freshnessSeconds) return { status: 400 };
 
@@ -42,14 +50,18 @@ export async function ingestWebhook(
   // payload is never persisted anywhere. All drops still answer 202 so the
   // response doesn't leak which groups a user subscribes to.
   const sub = await pool.query(
-    `SELECT s.id AS session_id, g.id AS group_id, g.enabled
+    `SELECT s.id AS session_id, s.status AS session_status, g.id AS group_id, g.enabled
      FROM whatsapp_sessions s
      LEFT JOIN groups g ON g.session_id = s.id AND g.external_jid = $2
      WHERE s.external_session_id = $1`,
     [evt.sessionExternalId, evt.groupJid],
   );
   if (sub.rows.length === 0) return { status: 202 }; // unknown session: unattributable, drop
-  const { session_id: sessionId, group_id: groupId, enabled } = sub.rows[0];
+  const { session_id: sessionId, session_status: sessionStatus, group_id: groupId, enabled } =
+    sub.rows[0];
+  // Disconnect boundary (ticket 3): a non-connected session ingests nothing —
+  // not even group discovery. Silent 202 like the consent drops.
+  if (sessionStatus !== "connected") return { status: 202 };
   if (!groupId) {
     // First sighting: register the group (metadata only, disabled by default)
     // so it shows up in the user's list to enable. The message itself is dropped.
