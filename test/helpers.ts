@@ -3,7 +3,7 @@ import { randomBytes } from "node:crypto";
 import type { AddressInfo } from "node:net";
 import { createPool, migrate, type Pool } from "../src/db.ts";
 import { createApp } from "../src/app.ts";
-import { signHmac, hashToken } from "../src/crypto.ts";
+import { signHmac, hashToken, encrypt } from "../src/crypto.ts";
 import type { Config } from "../src/config.ts";
 import type { GatewayEvent, GatewayPort, SessionStatus } from "../src/gateway/port.ts";
 
@@ -95,6 +95,7 @@ export type Harness = {
   seedUser: (token: string) => Promise<string>;
   seedSession: (userId: string, externalSessionId: string) => Promise<string>;
   seedGroup: (sessionId: string, externalJid: string, enabled?: boolean) => Promise<string>;
+  seedMessage: (groupId: string, externalId: string, sentAt: string) => Promise<void>;
   reset: () => Promise<void>;
   close: () => Promise<void>;
 };
@@ -164,9 +165,21 @@ export async function makeHarness(): Promise<Harness> {
       );
       return rows[0].id;
     },
+    // Store a message directly with a controlled sent_at — for scheduler tests,
+    // whose timelines sit outside the webhook freshness window by design.
+    async seedMessage(groupId, externalId, sentAt) {
+      await pool.query(
+        `INSERT INTO messages
+           (user_id, session_id, group_id, external_id, sent_at, body_ciphertext, expires_at)
+         SELECT s.user_id, g.session_id, g.id, $2, $3, $4, $3::timestamptz + interval '30 days'
+         FROM groups g JOIN whatsapp_sessions s ON s.id = g.session_id
+         WHERE g.id = $1`,
+        [groupId, externalId, sentAt, encrypt("seeded", config.encKey)],
+      );
+    },
     async reset() {
       await pool.query(
-        `TRUNCATE messages, consent_records, coverage_gaps, groups, whatsapp_sessions, users, ingest_events RESTART IDENTITY CASCADE`,
+        `TRUNCATE messages, summary_jobs, summary_schedules, consent_records, coverage_gaps, groups, whatsapp_sessions, users, ingest_events RESTART IDENTITY CASCADE`,
       );
     },
     async close() {

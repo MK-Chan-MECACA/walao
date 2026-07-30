@@ -19,6 +19,7 @@ import {
   listConnections,
 } from "./connections.ts";
 import { getRetentionDays, setRetentionDays } from "./retention.ts";
+import { setSchedule } from "./scheduler.ts";
 
 export type App = {
   handler: (req: IncomingMessage, res: ServerResponse) => void;
@@ -136,6 +137,28 @@ export function createApp(deps: { pool: pg.Pool; gateway: GatewayPort; config: C
           return;
         }
         send(res, 200, { ok: true });
+        return;
+      }
+
+      const sched = url.pathname.match(/^\/v1\/groups\/([0-9a-f-]{36})\/schedule$/);
+      if (req.method === "PUT" && sched) {
+        let body: unknown = {};
+        try {
+          body = JSON.parse((await readRawBody(req)).toString("utf8") || "{}");
+        } catch {
+          send(res, 400, { error: "bad_json" });
+          return;
+        }
+        const result = await setSchedule(pool, userId, sched[1], body);
+        if (result === "not_found") {
+          send(res, 404, { error: "not_found" });
+          return;
+        }
+        if (result === "not_enabled" || result === "invalid") {
+          send(res, 400, { error: result === "invalid" ? "invalid_schedule" : "not_enabled" });
+          return;
+        }
+        send(res, 200, result);
         return;
       }
 

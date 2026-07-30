@@ -4,6 +4,7 @@ import { createPool, migrate } from "./db.ts";
 import { createApp } from "./app.ts";
 import { WaapiGateway } from "./gateway/waapi.ts";
 import { purgeExpired } from "./retention.ts";
+import { tickScheduler } from "./scheduler.ts";
 
 // Real entrypoint. Boots the schema, serves the webhook + API, and drains the
 // queue on a simple interval. A single-process poll loop is enough for the
@@ -21,6 +22,7 @@ async function main(): Promise<void> {
     // ponytail: expiry purge piggybacks the 1s drain tick; split to its own
     // slower timer if the delete scan ever shows up in load.
     purgeExpired(pool).catch((err) => console.error("purge error", err));
+    tickScheduler(pool).catch((err) => console.error("scheduler error", err));
   }, 1000);
   timer.unref();
 
