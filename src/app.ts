@@ -29,6 +29,14 @@ import {
   updateReminder,
 } from "./surfaces.ts";
 import { deleteAccount, deleteGroupData, exportData, setPaused } from "./privacy.ts";
+import {
+  buildWeeklyReview,
+  confirmCandidate,
+  deleteMemory,
+  listCandidates,
+  listMemories,
+  updateMemory,
+} from "./memory.ts";
 import { askQuestion, type AnswererPort } from "./ask.ts";
 
 export type App = {
@@ -158,6 +166,63 @@ export function createApp(deps: {
           return;
         }
         send(res, 200, result);
+        return;
+      }
+
+      if (req.method === "GET" && url.pathname === "/v1/memories/candidates") {
+        send(res, 200, { candidates: await listCandidates(pool, userId) });
+        return;
+      }
+
+      const memConfirm = url.pathname.match(
+        /^\/v1\/summaries\/([0-9a-f-]{36})\/memory-candidates\/(\d{1,4})\/confirm$/,
+      );
+      if (req.method === "POST" && memConfirm) {
+        const result = await confirmCandidate(pool, userId, memConfirm[1], Number(memConfirm[2]));
+        if (result === "not_found") {
+          send(res, 404, { error: "not_found" });
+          return;
+        }
+        if (result === "invalid" || result === "expired") {
+          send(res, 400, { error: result === "expired" ? "candidate_expired" : "invalid_candidate" });
+          return;
+        }
+        send(res, 201, result);
+        return;
+      }
+
+      if (req.method === "GET" && url.pathname === "/v1/memories") {
+        send(res, 200, { memories: await listMemories(pool, userId) });
+        return;
+      }
+
+      const memory = url.pathname.match(/^\/v1\/memories\/([0-9a-f-]{36})$/);
+      if (req.method === "PUT" && memory) {
+        const body = await readJsonBody(req);
+        if (body === undefined) {
+          send(res, 400, { error: "bad_json" });
+          return;
+        }
+        const result = await updateMemory(pool, userId, memory[1], body);
+        if (result === "not_found") {
+          send(res, 404, { error: "not_found" });
+          return;
+        }
+        if (result === "invalid") {
+          send(res, 400, { error: "invalid_memory" });
+          return;
+        }
+        send(res, 200, result);
+        return;
+      }
+      if (req.method === "DELETE" && memory) {
+        const result = await deleteMemory(pool, userId, memory[1]);
+        send(res, result === "ok" ? 200 : 404, result === "ok" ? { ok: true } : { error: "not_found" });
+        return;
+      }
+
+      if (req.method === "GET" && url.pathname === "/v1/review/weekly") {
+        send(res, 200, await buildWeeklyReview(pool, userId));
         return;
       }
 

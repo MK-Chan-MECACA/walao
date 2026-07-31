@@ -45,7 +45,7 @@ export async function exportData(
   config: Config,
   userId: string,
 ): Promise<Record<string, unknown>> {
-  const [messages, summaries, user, groups] = await Promise.all([
+  const [messages, summaries, user, groups, memories] = await Promise.all([
     listMessages(pool, config, userId),
     pool.query(
       `SELECT id, group_id, language, window_start, window_end, payload, created_at
@@ -61,12 +61,19 @@ export async function exportData(
        WHERE s.user_id = $1 ORDER BY g.created_at`,
       [userId],
     ),
+    pool.query(
+      `SELECT id, content, source_message_ids, group_jid, summary_id, confirmed_by,
+              created_at, last_used_at
+       FROM memories WHERE user_id = $1 ORDER BY created_at`,
+      [userId],
+    ),
   ]);
   await audit(pool, userId, "export");
   return {
     exported_at: new Date().toISOString(),
     messages,
     summaries: summaries.rows,
+    memories: memories.rows,
     settings: {
       retention_days: user.rows[0].retention_days,
       paused: user.rows[0].paused,
@@ -76,9 +83,9 @@ export async function exportData(
 }
 
 // Group-level delete: the group row cascades messages, summaries (and their
-// item states), schedules, jobs, and consent records. Two things cascades
-// can't reach are handled explicitly: reminders (summary_id is SET NULL by
-// design so their copied text would survive) and queued raw webhook payloads.
+// item states), schedules, jobs, and consent records. What cascades can't
+// reach is handled explicitly: reminders and memories (summary_id is SET NULL
+// by design so their copied text would survive) and queued raw webhook payloads.
 export async function deleteGroupData(
   pool: pg.Pool,
   gateway: GatewayPort,
@@ -104,6 +111,13 @@ export async function deleteGroupData(
     // derived data of the group, so it goes too.
     await client.query(
       `DELETE FROM reminders WHERE summary_id IN (SELECT id FROM summaries WHERE group_id = $1)`,
+      [groupId],
+    );
+    // Same rule for confirmed memories: their content was copied out of this
+    // group's summaries, so a group delete takes them too (SET NULL would
+    // otherwise leave the copied text behind).
+    await client.query(
+      `DELETE FROM memories WHERE summary_id IN (SELECT id FROM summaries WHERE group_id = $1)`,
       [groupId],
     );
     await deleteQueuedEvents(client, gateway, sessionExternalId, jid);
