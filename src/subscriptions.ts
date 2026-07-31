@@ -1,4 +1,5 @@
 import type pg from "pg";
+import { PLANS } from "./billing.ts";
 
 // Bump when the attestation wording shown to the user changes. Enabling
 // requires the client to echo the current version, proving the user saw the
@@ -33,7 +34,7 @@ export async function listGroups(pool: pg.Pool, userId: string): Promise<GroupVi
   return rows;
 }
 
-export type ToggleResult = "ok" | "not_found" | "attestation_required";
+export type ToggleResult = "ok" | "not_found" | "attestation_required" | "plan_limit";
 
 // Enable requires a matching self-attestation; the flag flip and the audit
 // record commit atomically so an enabled group can never lack its consent record.
@@ -65,6 +66,26 @@ async function setEnabled(
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
+    if (enabled) {
+      // Plan cap on enabled groups (spec §53). FOR UPDATE on the user row
+      // serializes concurrent enables so the cap can't be raced past. The
+      // target group is excluded so re-attesting an already-enabled group
+      // at the cap still works.
+      const plan = await client.query(`SELECT plan FROM users WHERE id = $1 FOR UPDATE`, [
+        userId,
+      ]);
+      const cap = PLANS[(plan.rows[0]?.plan ?? "free") as keyof typeof PLANS].max_groups;
+      const n = await client.query(
+        `SELECT count(*)::int AS n FROM groups g
+         JOIN whatsapp_sessions s ON s.id = g.session_id
+         WHERE s.user_id = $1 AND g.enabled AND g.id <> $2`,
+        [userId, groupId],
+      );
+      if (n.rows[0].n >= cap) {
+        await client.query("ROLLBACK");
+        return "plan_limit";
+      }
+    }
     // The join to the user's sessions is the tenant boundary: another user's
     // group id behaves exactly like a nonexistent one.
     const res = await client.query(

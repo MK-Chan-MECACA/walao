@@ -40,6 +40,7 @@ import {
 import { askQuestion, type AnswererPort } from "./ask.ts";
 import { enableTier1, sendOutbound } from "./tier1.ts";
 import { isHalted, setHalted } from "./halt.ts";
+import { getUsage } from "./billing.ts";
 import { hashToken } from "./crypto.ts";
 import { timingSafeEqual } from "node:crypto";
 
@@ -360,6 +361,11 @@ export function createApp(deps: {
         return;
       }
 
+      if (req.method === "GET" && url.pathname === "/v1/usage") {
+        send(res, 200, await getUsage(pool, userId));
+        return;
+      }
+
       if (req.method === "GET" && url.pathname === "/v1/consent-records") {
         send(res, 200, { records: await listConsentRecords(pool, userId) });
         return;
@@ -482,6 +488,10 @@ export function createApp(deps: {
         }
         if (result === "attestation_required") {
           send(res, 400, { error: "attestation_required" });
+          return;
+        }
+        if (result === "plan_limit") {
+          send(res, 403, { error: "plan_limit" });
           return;
         }
         if (result === "not_found") {

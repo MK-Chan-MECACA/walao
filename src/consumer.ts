@@ -2,6 +2,7 @@ import type pg from "pg";
 import type { GatewayPort } from "./gateway/port.ts";
 import type { Config } from "./config.ts";
 import { encrypt } from "./crypto.ts";
+import { PLANS, countMessagesToday, getPlan } from "./billing.ts";
 
 // Drain the durable queue: pick pending events (locked so concurrent/​restarted
 // consumers don't double-process), normalize via the gateway port, encrypt the
@@ -86,6 +87,26 @@ async function processEvent(
   );
   if (group.rows.length === 0 || !group.rows[0].enabled) return false;
   const groupId = group.rows[0].id;
+
+  // Plan cap on stored message volume per UTC day (spec §53). Beyond the cap
+  // the event is skipped and a coverage gap opens, so any brief overlapping the
+  // capped window is flagged incomplete — never silently truncated. The first
+  // under-cap store closes the gap.
+  const plan = await getPlan(client, userId);
+  if ((await countMessagesToday(client, userId)) >= PLANS[plan].max_messages_per_day) {
+    await client.query(
+      `INSERT INTO coverage_gaps (session_id, reason)
+       SELECT $1, 'plan_limit' WHERE NOT EXISTS
+         (SELECT 1 FROM coverage_gaps WHERE session_id = $1 AND ended_at IS NULL)`,
+      [sessionId],
+    );
+    return false;
+  }
+  await client.query(
+    `UPDATE coverage_gaps SET ended_at = now()
+     WHERE session_id = $1 AND reason = 'plan_limit' AND ended_at IS NULL`,
+    [sessionId],
+  );
 
   const ciphertext = encrypt(evt.text, config.encKey);
 

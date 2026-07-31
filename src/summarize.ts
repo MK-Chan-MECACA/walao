@@ -2,6 +2,7 @@ import type pg from "pg";
 import type { Config } from "./config.ts";
 import { decrypt } from "./crypto.ts";
 import type { Language } from "./scheduler.ts";
+import { PLANS, creditsToday, getPlan } from "./billing.ts";
 
 // SummarizerPort — the AI boundary (spec: batch + config in, structured JSON
 // out). The port receives plain data and returns plain data; it holds no tool
@@ -173,6 +174,19 @@ export async function processSummaryJobs(
       let inputTokens = 0;
       let outputTokens = 0;
       let durationMs = 0;
+      // Plan cap on AI usage per UTC day (spec §53): credits = AI-generated
+      // summaries. Empty batches cost nothing and pass through; a capped job is
+      // parked as 'capped' (its window is stale by the next billing day, so it
+      // is not retried) and stays visible via job status and /v1/usage.
+      if (batch.length > 0) {
+        const plan = await getPlan(client, job.user_id);
+        if ((await creditsToday(client, job.user_id)) >= PLANS[plan].max_summaries_per_day) {
+          await client.query(`UPDATE summary_jobs SET status = 'capped' WHERE id = $1`, [job.id]);
+          await client.query("COMMIT");
+          continue;
+        }
+      }
+
       if (batch.length > 0) {
         const t0 = Date.now();
         const res = await summarizer.summarize({ language: job.language, messages: batch });
