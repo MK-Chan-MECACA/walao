@@ -13,6 +13,7 @@ import {
   type SummarizerResult,
 } from "../src/summarize.ts";
 import { deliverSummaries } from "../src/deliver.ts";
+import type { AnswererInput, AnswererPort, AnswererResult } from "../src/ask.ts";
 
 export const WEBHOOK_SECRET = "test-secret";
 
@@ -87,6 +88,18 @@ export class FakeSummarizer implements SummarizerPort {
   }
 }
 
+// Fake AnswererPort — same seam as FakeSummarizer: canned JSON out, every
+// input recorded so tests can assert exactly what the model was fed.
+export class FakeAnswerer implements AnswererPort {
+  canned: unknown = {};
+  calls: AnswererInput[] = [];
+
+  async answer(input: AnswererInput): Promise<AnswererResult> {
+    this.calls.push(input);
+    return { output: this.canned, model: "fake-model-1", promptVersion: "test-v1" };
+  }
+}
+
 export type SyntheticEvent = {
   kind: "message";
   session: string;
@@ -137,6 +150,7 @@ export type Harness = {
   ) => Promise<string>;
   gateway: FakeGateway;
   summarizer: FakeSummarizer;
+  answerer: FakeAnswerer;
   summarize: () => Promise<number>;
   deliver: () => Promise<number>;
   reset: () => Promise<void>;
@@ -148,7 +162,8 @@ export async function makeHarness(): Promise<Harness> {
   const pool = createPool(config.databaseUrl);
   await migrate(pool);
   const gateway = new FakeGateway();
-  const app = createApp({ pool, gateway, config });
+  const answerer = new FakeAnswerer();
+  const app = createApp({ pool, gateway, answerer, config });
   const summarizer = new FakeSummarizer();
   const server: Server = createServer(app.handler);
   await new Promise<void>((resolve) => server.listen(0, resolve));
@@ -227,6 +242,7 @@ export async function makeHarness(): Promise<Harness> {
     },
     gateway,
     summarizer,
+    answerer,
     summarize: () => processSummaryJobs(pool, summarizer, config),
     deliver: () => deliverSummaries(pool, gateway),
     async reset() {
@@ -234,6 +250,8 @@ export async function makeHarness(): Promise<Harness> {
       summarizer.canned = {};
       summarizer.calls = [];
       summarizer.fail = false;
+      answerer.canned = {};
+      answerer.calls = [];
       await pool.query(
         `TRUNCATE messages, summaries, summary_jobs, summary_schedules, consent_records, coverage_gaps, groups, whatsapp_sessions, users, ingest_events, privacy_audit RESTART IDENTITY CASCADE`,
       );

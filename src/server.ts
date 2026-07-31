@@ -6,6 +6,7 @@ import { WaapiGateway } from "./gateway/waapi.ts";
 import { purgeExpired } from "./retention.ts";
 import { tickScheduler } from "./scheduler.ts";
 import { deliverSummaries } from "./deliver.ts";
+import type { AnswererPort } from "./ask.ts";
 
 // Real entrypoint. Boots the schema, serves the webhook + API, and drains the
 // queue on a simple interval. A single-process poll loop is enough for the
@@ -17,7 +18,12 @@ async function main(): Promise<void> {
   await migrate(pool);
 
   const gateway = new WaapiGateway();
-  const app = createApp({ pool, gateway, config });
+  // ponytail: real model client wired when one is provisioned; FakeAnswerer
+  // covers ticket 11 (same status as WAAPI pairing/sendToSelf).
+  const answerer: AnswererPort = {
+    answer: () => Promise.reject(new Error("answerer not implemented")),
+  };
+  const app = createApp({ pool, gateway, answerer, config });
 
   const timer = setInterval(() => {
     app.drain().catch((err) => console.error("drain error", err));

@@ -29,6 +29,7 @@ import {
   updateReminder,
 } from "./surfaces.ts";
 import { deleteAccount, deleteGroupData, exportData, setPaused } from "./privacy.ts";
+import { askQuestion, type AnswererPort } from "./ask.ts";
 
 export type App = {
   handler: (req: IncomingMessage, res: ServerResponse) => void;
@@ -38,8 +39,13 @@ export type App = {
 // Compose the system with an injectable GatewayPort — the whole-system test seam
 // swaps in a fake gateway while everything else (ingress security, queue, store,
 // API) runs for real against real Postgres.
-export function createApp(deps: { pool: pg.Pool; gateway: GatewayPort; config: Config }): App {
-  const { pool, gateway, config } = deps;
+export function createApp(deps: {
+  pool: pg.Pool;
+  gateway: GatewayPort;
+  answerer: AnswererPort;
+  config: Config;
+}): App {
+  const { pool, gateway, answerer, config } = deps;
 
   const handler = (req: IncomingMessage, res: ServerResponse): void => {
     void route(req, res).catch((err) => {
@@ -131,6 +137,27 @@ export function createApp(deps: { pool: pg.Pool; gateway: GatewayPort; config: C
           return;
         }
         send(res, 201, result);
+        return;
+      }
+
+      if (req.method === "POST" && url.pathname === "/v1/ask") {
+        const body = await readJsonBody(req);
+        if (body === undefined) {
+          send(res, 400, { error: "bad_json" });
+          return;
+        }
+        const result = await askQuestion(
+          pool,
+          answerer,
+          config,
+          userId,
+          (body as Record<string, unknown>).question,
+        );
+        if (result === "invalid") {
+          send(res, 400, { error: "invalid_question" });
+          return;
+        }
+        send(res, 200, result);
         return;
       }
 
