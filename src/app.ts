@@ -20,6 +20,7 @@ import {
 } from "./connections.ts";
 import { getRetentionDays, setRetentionDays } from "./retention.ts";
 import { setSchedule } from "./scheduler.ts";
+import { buildTodayBrief } from "./brief.ts";
 
 export type App = {
   handler: (req: IncomingMessage, res: ServerResponse) => void;
@@ -60,6 +61,11 @@ export function createApp(deps: { pool: pg.Pool; gateway: GatewayPort; config: C
 
       if (req.method === "GET" && url.pathname === "/v1/messages") {
         send(res, 200, { messages: await listMessages(pool, config, userId) });
+        return;
+      }
+
+      if (req.method === "GET" && url.pathname === "/v1/briefs/today") {
+        send(res, 200, await buildTodayBrief(pool, userId));
         return;
       }
 
