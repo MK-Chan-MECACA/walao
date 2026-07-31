@@ -28,6 +28,7 @@ import {
   setItemState,
   updateReminder,
 } from "./surfaces.ts";
+import { deleteAccount, deleteGroupData, exportData, setPaused } from "./privacy.ts";
 
 export type App = {
   handler: (req: IncomingMessage, res: ServerResponse) => void;
@@ -155,6 +156,35 @@ export function createApp(deps: { pool: pg.Pool; gateway: GatewayPort; config: C
           return;
         }
         send(res, 200, result);
+        return;
+      }
+
+      if (req.method === "POST" && (url.pathname === "/v1/pause" || url.pathname === "/v1/resume")) {
+        const paused = url.pathname === "/v1/pause";
+        await setPaused(pool, userId, paused);
+        send(res, 200, { paused });
+        return;
+      }
+
+      if (req.method === "GET" && url.pathname === "/v1/export") {
+        send(res, 200, await exportData(pool, config, userId));
+        return;
+      }
+
+      if (req.method === "DELETE" && url.pathname === "/v1/account") {
+        await deleteAccount(pool, userId);
+        send(res, 200, { ok: true });
+        return;
+      }
+
+      const delGroup = url.pathname.match(/^\/v1\/groups\/([0-9a-f-]{36})$/);
+      if (req.method === "DELETE" && delGroup) {
+        const result = await deleteGroupData(pool, gateway, userId, delGroup[1]);
+        if (result === "not_found") {
+          send(res, 404, { error: "not_found" });
+          return;
+        }
+        send(res, 200, { ok: true });
         return;
       }
 

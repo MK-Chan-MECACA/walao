@@ -139,7 +139,8 @@ export async function processSummaryJobs(
          FROM summary_jobs j
          JOIN groups g ON g.id = j.group_id
          JOIN whatsapp_sessions s ON s.id = g.session_id
-         WHERE j.status = 'pending'
+         JOIN users u ON u.id = s.user_id
+         WHERE j.status = 'pending' AND NOT u.paused
          ORDER BY j.id
          FOR UPDATE OF j SKIP LOCKED
          LIMIT 1`,

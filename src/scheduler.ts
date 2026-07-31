@@ -102,7 +102,9 @@ export async function tickScheduler(pool: pg.Pool, now: Date = new Date()): Prom
     `SELECT s.group_id, s.local_time, s.timezone, s.language, s.last_fired_at
      FROM summary_schedules s
      JOIN groups g ON g.id = s.group_id
-     WHERE g.enabled`,
+     JOIN whatsapp_sessions ws ON ws.id = g.session_id
+     JOIN users u ON u.id = ws.user_id
+     WHERE g.enabled AND NOT u.paused`,
   );
 
   const jobs: SummaryJob[] = [];

@@ -235,7 +235,7 @@ export async function makeHarness(): Promise<Harness> {
       summarizer.calls = [];
       summarizer.fail = false;
       await pool.query(
-        `TRUNCATE messages, summaries, summary_jobs, summary_schedules, consent_records, coverage_gaps, groups, whatsapp_sessions, users, ingest_events RESTART IDENTITY CASCADE`,
+        `TRUNCATE messages, summaries, summary_jobs, summary_schedules, consent_records, coverage_gaps, groups, whatsapp_sessions, users, ingest_events, privacy_audit RESTART IDENTITY CASCADE`,
       );
     },
     async close() {

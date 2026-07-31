@@ -70,7 +70,8 @@ export async function deliverSummaries(pool: pg.Pool, gateway: GatewayPort): Pro
          FROM summaries s
          JOIN groups g ON g.id = s.group_id
          JOIN whatsapp_sessions ws ON ws.id = g.session_id
-         WHERE s.delivered_at IS NULL AND ws.status = 'connected'
+         JOIN users u ON u.id = ws.user_id
+         WHERE s.delivered_at IS NULL AND ws.status = 'connected' AND NOT u.paused
          ORDER BY s.created_at
          FOR UPDATE OF s SKIP LOCKED
          LIMIT 1`,

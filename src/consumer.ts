@@ -65,13 +65,16 @@ async function processEvent(
 
   // Resolve session -> owning user (tenant). Unknown session => skip: we can't
   // attribute the message to a tenant, and unattributed data must not be stored.
-  // Status guard mirrors the ingress one: "disconnect stops ingestion
-  // immediately" means events already queued before disconnect are skipped too.
+  // Status and pause guards mirror the ingress ones: "disconnect/pause stops
+  // processing immediately" means events queued before the change skip too.
   const session = await client.query(
-    `SELECT id, user_id, status FROM whatsapp_sessions WHERE external_session_id = $1`,
+    `SELECT s.id, s.user_id, s.status, u.paused
+     FROM whatsapp_sessions s JOIN users u ON u.id = s.user_id
+     WHERE s.external_session_id = $1`,
     [evt.sessionExternalId],
   );
   if (session.rows.length === 0 || session.rows[0].status !== "connected") return false;
+  if (session.rows[0].paused) return false;
   const { id: sessionId, user_id: userId } = session.rows[0];
 
   // Store-time consent guard: ingress already drops disabled groups, but an

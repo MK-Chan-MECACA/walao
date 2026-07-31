@@ -56,18 +56,22 @@ export async function ingestWebhook(
   // payload is never persisted anywhere. All drops still answer 202 so the
   // response doesn't leak which groups a user subscribes to.
   const sub = await pool.query(
-    `SELECT s.id AS session_id, s.status AS session_status, g.id AS group_id, g.enabled
+    `SELECT s.id AS session_id, s.status AS session_status, u.paused, g.id AS group_id, g.enabled
      FROM whatsapp_sessions s
+     JOIN users u ON u.id = s.user_id
      LEFT JOIN groups g ON g.session_id = s.id AND g.external_jid = $2
      WHERE s.external_session_id = $1`,
     [evt.sessionExternalId, evt.groupJid],
   );
   if (sub.rows.length === 0) return { status: 202 }; // unknown session: unattributable, drop
-  const { session_id: sessionId, session_status: sessionStatus, group_id: groupId, enabled } =
+  const { session_id: sessionId, session_status: sessionStatus, paused, group_id: groupId, enabled } =
     sub.rows[0];
   // Disconnect boundary (ticket 3): a non-connected session ingests nothing —
   // not even group discovery. Silent 202 like the consent drops.
   if (sessionStatus !== "connected") return { status: 202 };
+  // Pause boundary (ticket 10): a paused user ingests nothing either — the
+  // event is dropped before any write, group discovery included.
+  if (paused) return { status: 202 };
   if (!groupId) {
     // First sighting: register the group (metadata only, disabled by default)
     // so it shows up in the user's list to enable. The message itself is dropped.
