@@ -21,6 +21,13 @@ import {
 import { getRetentionDays, setRetentionDays } from "./retention.ts";
 import { setSchedule } from "./scheduler.ts";
 import { buildTodayBrief } from "./brief.ts";
+import {
+  confirmActionItem,
+  listReminders,
+  listSummaries,
+  setItemState,
+  updateReminder,
+} from "./surfaces.ts";
 
 export type App = {
   handler: (req: IncomingMessage, res: ServerResponse) => void;
@@ -66,6 +73,88 @@ export function createApp(deps: { pool: pg.Pool; gateway: GatewayPort; config: C
 
       if (req.method === "GET" && url.pathname === "/v1/briefs/today") {
         send(res, 200, await buildTodayBrief(pool, userId));
+        return;
+      }
+
+      if (req.method === "GET" && url.pathname === "/v1/summaries") {
+        send(res, 200, { summaries: await listSummaries(pool, userId) });
+        return;
+      }
+
+      const itemState = url.pathname.match(
+        /^\/v1\/summaries\/([0-9a-f-]{36})\/items\/([a-z_]+)\/(\d{1,4})\/state$/,
+      );
+      if (req.method === "PUT" && itemState) {
+        const body = await readJsonBody(req);
+        if (body === undefined) {
+          send(res, 400, { error: "bad_json" });
+          return;
+        }
+        const state = (body as Record<string, unknown>).state ?? null;
+        const result = await setItemState(
+          pool,
+          userId,
+          itemState[1],
+          itemState[2],
+          Number(itemState[3]),
+          state,
+        );
+        if (result === "not_found") {
+          send(res, 404, { error: "not_found" });
+          return;
+        }
+        if (result === "invalid") {
+          send(res, 400, { error: "invalid_item_state" });
+          return;
+        }
+        send(res, 200, { ok: true });
+        return;
+      }
+
+      const confirm = url.pathname.match(
+        /^\/v1\/summaries\/([0-9a-f-]{36})\/action-items\/(\d{1,4})\/confirm$/,
+      );
+      if (req.method === "POST" && confirm) {
+        const body = await readJsonBody(req);
+        if (body === undefined) {
+          send(res, 400, { error: "bad_json" });
+          return;
+        }
+        const result = await confirmActionItem(pool, userId, confirm[1], Number(confirm[2]), body);
+        if (result === "not_found") {
+          send(res, 404, { error: "not_found" });
+          return;
+        }
+        if (result === "invalid") {
+          send(res, 400, { error: "invalid_action_item" });
+          return;
+        }
+        send(res, 201, result);
+        return;
+      }
+
+      if (req.method === "GET" && url.pathname === "/v1/reminders") {
+        send(res, 200, { reminders: await listReminders(pool, userId) });
+        return;
+      }
+
+      const reminder = url.pathname.match(/^\/v1\/reminders\/([0-9a-f-]{36})$/);
+      if (req.method === "PUT" && reminder) {
+        const body = await readJsonBody(req);
+        if (body === undefined) {
+          send(res, 400, { error: "bad_json" });
+          return;
+        }
+        const result = await updateReminder(pool, userId, reminder[1], body);
+        if (result === "not_found") {
+          send(res, 404, { error: "not_found" });
+          return;
+        }
+        if (result === "invalid") {
+          send(res, 400, { error: "invalid_reminder" });
+          return;
+        }
+        send(res, 200, result);
         return;
       }
 
@@ -202,6 +291,15 @@ export function createApp(deps: { pool: pg.Pool; gateway: GatewayPort; config: C
   }
 
   return { handler, drain: () => drainQueue(pool, gateway, config) };
+}
+
+// undefined = malformed JSON (caller sends 400). Empty body parses as {}.
+async function readJsonBody(req: IncomingMessage): Promise<unknown> {
+  try {
+    return JSON.parse((await readRawBody(req)).toString("utf8") || "{}");
+  } catch {
+    return undefined;
+  }
 }
 
 function readRawBody(req: IncomingMessage): Promise<Buffer> {

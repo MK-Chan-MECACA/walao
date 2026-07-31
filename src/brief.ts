@@ -1,10 +1,12 @@
 import type pg from "pg";
 import type { SummaryPayload } from "./summarize.ts";
+import { jumpUrl } from "./surfaces.ts";
 
 export type BriefSource = {
   summary_id: string;
   group_id: string;
   group_name: string | null;
+  jump_url: string;
   source_message_ids: string[];
 };
 
@@ -39,7 +41,7 @@ const BUCKETS: [keyof SummaryPayload, Bucket][] = [
 // calendar day when a timezone complaint arrives.
 export async function buildTodayBrief(pool: pg.Pool, userId: string): Promise<TodayBrief> {
   const { rows } = await pool.query(
-    `SELECT s.id, s.group_id, s.payload, g.name AS group_name
+    `SELECT s.id, s.group_id, s.payload, g.name AS group_name, g.external_jid
      FROM summaries s
      JOIN groups g ON g.id = s.group_id
      WHERE s.user_id = $1 AND s.window_end > now() - interval '24 hours'
@@ -69,6 +71,7 @@ export async function buildTodayBrief(pool: pg.Pool, userId: string): Promise<To
           summary_id: r.id as string,
           group_id: r.group_id as string,
           group_name: r.group_name as string | null,
+          jump_url: jumpUrl(r.external_jid as string),
           source_message_ids: it.source_message_ids,
         });
       }
