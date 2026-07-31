@@ -1,6 +1,7 @@
 import type pg from "pg";
 import type { GatewayPort } from "./gateway/port.ts";
 import type { ActionItem, SummaryPayload } from "./summarize.ts";
+import { isHalted } from "./halt.ts";
 
 const SECTIONS: [keyof SummaryPayload, string][] = [
   ["highlights", "Highlights"],
@@ -55,6 +56,9 @@ function actionSuffix(a: ActionItem): string {
 // A send failure rolls back and the row retries on the next tick (at-least-once:
 // a crash between send and commit can duplicate a chat message, never lose one).
 export async function deliverSummaries(pool: pg.Pool, gateway: GatewayPort): Promise<number> {
+  // Halt switch (ticket 14): no gateway sends while halted. Undelivered
+  // summaries simply wait; un-halting resumes them on the next tick.
+  if (await isHalted(pool)) return 0;
   let delivered = 0;
   for (;;) {
     const client = await pool.connect();

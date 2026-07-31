@@ -16,11 +16,13 @@ import { deliverSummaries } from "../src/deliver.ts";
 import type { AnswererInput, AnswererPort, AnswererResult } from "../src/ask.ts";
 
 export const WEBHOOK_SECRET = "test-secret";
+export const OPERATOR_SECRET = "test-operator-secret";
 
 export function testConfig(): Config {
   return {
     databaseUrl: process.env.DATABASE_URL as string,
     webhookSecret: WEBHOOK_SECRET,
+    operatorSecret: OPERATOR_SECRET,
     encKey: randomBytes(32),
     freshnessSeconds: 300,
     port: 0,
@@ -268,6 +270,8 @@ export async function makeHarness(): Promise<Harness> {
       await pool.query(
         `TRUNCATE messages, summaries, summary_jobs, summary_schedules, consent_records, coverage_gaps, groups, whatsapp_sessions, users, ingest_events, privacy_audit RESTART IDENTITY CASCADE`,
       );
+      // system_halt is a singleton row, not per-test data — un-halt, don't truncate.
+      await pool.query(`UPDATE system_halt SET halted = false`);
     },
     async close() {
       await new Promise<void>((resolve) => server.close(() => resolve()));

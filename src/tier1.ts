@@ -1,5 +1,6 @@
 import type pg from "pg";
 import type { GatewayPort } from "./gateway/port.ts";
+import { isHalted } from "./halt.ts";
 
 // Tier 1 (spec §47–48): opt-in outbound to others. Tier 0 stays the default —
 // nothing here runs unless the user explicitly authorized outbound and accepted
@@ -32,6 +33,7 @@ export type OutboundResult =
   | "paused"
   | "not_connected"
   | "handshake_pending"
+  | "halted"
   | { sent: true; handshake: "pending" | "confirmed" };
 
 export async function sendOutbound(
@@ -43,6 +45,7 @@ export async function sendOutbound(
 ): Promise<OutboundResult> {
   if (typeof recipient !== "string" || recipient.length === 0) return "invalid";
   if (typeof text !== "string" || text.length === 0) return "invalid";
+  if (await isHalted(pool)) return "halted"; // ticket 14: no outbound while halted
 
   const user = await pool.query(`SELECT paused, tier1_enabled_at FROM users WHERE id = $1`, [
     userId,

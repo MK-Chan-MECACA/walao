@@ -39,6 +39,9 @@ import {
 } from "./memory.ts";
 import { askQuestion, type AnswererPort } from "./ask.ts";
 import { enableTier1, sendOutbound } from "./tier1.ts";
+import { isHalted, setHalted } from "./halt.ts";
+import { hashToken } from "./crypto.ts";
+import { timingSafeEqual } from "node:crypto";
 
 export type App = {
   handler: (req: IncomingMessage, res: ServerResponse) => void;
@@ -67,10 +70,34 @@ export function createApp(deps: {
     const url = new URL(req.url ?? "/", "http://localhost");
 
     if (req.method === "POST" && url.pathname === "/webhooks/gateway") {
+      // Halt switch (ticket 14): while halted the gateway ingress is refused
+      // outright — nothing is parsed, verified, or written.
+      if (await isHalted(pool)) {
+        send(res, 503, null);
+        return;
+      }
       const raw = await readRawBody(req);
       const sig = header(req, "x-walao-signature");
       const result = await ingestWebhook(pool, gateway, config, raw, sig);
       send(res, result.status, null);
+      return;
+    }
+
+    // Operator-only halt switch (ticket 14). Authorized by a dedicated secret,
+    // compared constant-time via hashes — not by user bearer tokens.
+    if (req.method === "POST" && (url.pathname === "/admin/halt" || url.pathname === "/admin/resume")) {
+      const given = header(req, "x-walao-operator-secret");
+      const ok = timingSafeEqual(
+        Buffer.from(hashToken(given)),
+        Buffer.from(hashToken(config.operatorSecret)),
+      );
+      if (!ok) {
+        send(res, 401, { error: "unauthorized" });
+        return;
+      }
+      const halted = url.pathname === "/admin/halt";
+      await setHalted(pool, halted);
+      send(res, 200, { halted });
       return;
     }
 
@@ -287,6 +314,10 @@ export function createApp(deps: {
           send(res, 403, { error: "tier1_required" });
           return;
         }
+        if (result === "halted") {
+          send(res, 503, { error: "halted" });
+          return;
+        }
         if (typeof result === "string") {
           send(res, 409, { error: result }); // paused | not_connected | handshake_pending
           return;
@@ -368,7 +399,12 @@ export function createApp(deps: {
       }
 
       if (req.method === "GET" && url.pathname === "/v1/connections") {
-        send(res, 200, { connections: await listConnections(pool, userId) });
+        // Halt state rides the connection-health surface so users see an honest
+        // status instead of a silently dead gateway.
+        send(res, 200, {
+          connections: await listConnections(pool, userId),
+          halted: await isHalted(pool),
+        });
         return;
       }
 
@@ -384,6 +420,10 @@ export function createApp(deps: {
         const result = await createConnection(pool, gateway, userId, version);
         if (result === "disclosure_required") {
           send(res, 400, { error: "disclosure_required" });
+          return;
+        }
+        if (result === "halted") {
+          send(res, 503, { error: "halted" });
           return;
         }
         send(res, 201, result);

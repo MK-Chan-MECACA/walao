@@ -4,6 +4,7 @@
 export type Config = {
   databaseUrl: string;
   webhookSecret: string;
+  operatorSecret: string; // authorizes the product-wide halt switch
   encKey: Buffer; // 32 bytes for AES-256-GCM
   freshnessSeconds: number;
   port: number;
@@ -23,6 +24,7 @@ export function loadConfig(): Config {
   return {
     databaseUrl: required("DATABASE_URL"),
     webhookSecret: required("WALAO_WEBHOOK_SECRET"),
+    operatorSecret: required("WALAO_OPERATOR_SECRET"),
     encKey,
     freshnessSeconds: Number(process.env.WALAO_FRESHNESS_SECONDS ?? 300),
     port: Number(process.env.PORT ?? 3000),

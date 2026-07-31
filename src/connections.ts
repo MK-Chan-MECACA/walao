@@ -1,5 +1,6 @@
 import type pg from "pg";
 import type { GatewayPort, NormalizedStatus, SessionStatus } from "./gateway/port.ts";
+import { isHalted } from "./halt.ts";
 
 // Shown before pairing. POST /v1/connections must echo the current version
 // (same pattern as the group attestation) so pairing cannot start unseen.
@@ -36,8 +37,9 @@ export async function createConnection(
   gateway: GatewayPort,
   userId: string,
   disclosureVersion: unknown,
-): Promise<"disclosure_required" | { connection: ConnectionView; pairing_code: string }> {
+): Promise<"disclosure_required" | "halted" | { connection: ConnectionView; pairing_code: string }> {
   if (disclosureVersion !== ONBOARDING_DISCLOSURE.version) return "disclosure_required";
+  if (await isHalted(pool)) return "halted"; // ticket 14: pairing is gateway activity too
   const pairing = await gateway.startPairing();
   const { rows } = await pool.query(
     `INSERT INTO whatsapp_sessions (user_id, external_session_id, status)
