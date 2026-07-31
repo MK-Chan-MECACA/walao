@@ -98,8 +98,10 @@ test("summary window overlapping a halt is delivered incomplete-flagged after re
   await opPost("/admin/halt", OPERATOR_SECRET);
   await opPost("/admin/resume", OPERATOR_SECRET);
 
-  // Window spans the halt moment → overlaps the closed 'halted' coverage gap.
-  await seedPendingSummary(userId, groupId, new Date(Date.now() + 3600_000));
+  // Window [now-30m, now+30m] provably spans the halt moment → overlaps the
+  // closed 'halted' coverage gap. (windowEnd = now+1h put window_start at the
+  // seed instant, racing the gap's ended_at by sub-millisecond margins.)
+  await seedPendingSummary(userId, groupId, new Date(Date.now() + 1800_000));
   assert.equal(await h.deliver(), 1);
   assert.match(h.gateway.sends[0].text, /Incomplete/);
 });

@@ -40,6 +40,7 @@ import {
 import { askQuestion, type AnswererPort } from "./ask.ts";
 import { enableTier1, sendOutbound } from "./tier1.ts";
 import { isHalted, setHalted } from "./halt.ts";
+import { recordReview, reviewQueue } from "./quality.ts";
 import { getUsage } from "./billing.ts";
 import { hashToken } from "./crypto.ts";
 import { timingSafeEqual } from "node:crypto";
@@ -84,9 +85,9 @@ export function createApp(deps: {
       return;
     }
 
-    // Operator-only halt switch (ticket 14). Authorized by a dedicated secret,
-    // compared constant-time via hashes — not by user bearer tokens.
-    if (req.method === "POST" && (url.pathname === "/admin/halt" || url.pathname === "/admin/resume")) {
+    // Everything under /admin is operator-only. Authorized by a dedicated
+    // secret, compared constant-time via hashes — not by user bearer tokens.
+    if (url.pathname.startsWith("/admin/")) {
       const given = header(req, "x-walao-operator-secret");
       const ok = timingSafeEqual(
         Buffer.from(hashToken(given)),
@@ -96,9 +97,40 @@ export function createApp(deps: {
         send(res, 401, { error: "unauthorized" });
         return;
       }
-      const halted = url.pathname === "/admin/halt";
-      await setHalted(pool, halted);
-      send(res, 200, { halted });
+
+      // Halt switch (ticket 14).
+      if (req.method === "POST" && (url.pathname === "/admin/halt" || url.pathname === "/admin/resume")) {
+        const halted = url.pathname === "/admin/halt";
+        await setHalted(pool, halted);
+        send(res, 200, { halted });
+        return;
+      }
+
+      // Quality operations (ticket 16, spec §54-55).
+      if (req.method === "GET" && url.pathname === "/admin/review/queue") {
+        send(res, 200, await reviewQueue(pool));
+        return;
+      }
+      if (req.method === "POST" && url.pathname === "/admin/review") {
+        const body = await readJsonBody(req);
+        if (body === undefined) {
+          send(res, 400, { error: "bad_json" });
+          return;
+        }
+        const result = await recordReview(pool, body);
+        if (result === "invalid") {
+          send(res, 400, { error: "invalid_review" });
+          return;
+        }
+        if (result === "not_found") {
+          send(res, 404, { error: "not_found" });
+          return;
+        }
+        send(res, 201, result);
+        return;
+      }
+
+      send(res, 404, { error: "not_found" });
       return;
     }
 
