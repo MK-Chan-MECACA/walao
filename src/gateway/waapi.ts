@@ -55,4 +55,10 @@ export class WaapiGateway implements GatewayPort {
   sendToSelf(): Promise<void> {
     return Promise.reject(new Error("WAAPI sendToSelf not implemented"));
   }
+
+  // ponytail: needs the WAAPI REST client (send to an arbitrary JID); wire it
+  // when a real gateway is provisioned. FakeGateway covers ticket 13.
+  sendToRecipient(): Promise<void> {
+    return Promise.reject(new Error("WAAPI sendToRecipient not implemented"));
+  }
 }

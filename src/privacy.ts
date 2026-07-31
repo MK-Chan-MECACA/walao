@@ -45,7 +45,7 @@ export async function exportData(
   config: Config,
   userId: string,
 ): Promise<Record<string, unknown>> {
-  const [messages, summaries, user, groups, memories] = await Promise.all([
+  const [messages, summaries, user, groups, memories, recipients] = await Promise.all([
     listMessages(pool, config, userId),
     pool.query(
       `SELECT id, group_id, language, window_start, window_end, payload, created_at
@@ -67,6 +67,11 @@ export async function exportData(
        FROM memories WHERE user_id = $1 ORDER BY created_at`,
       [userId],
     ),
+    pool.query(
+      `SELECT recipient_jid, status, created_at, confirmed_at
+       FROM outbound_recipients WHERE user_id = $1 ORDER BY created_at`,
+      [userId],
+    ),
   ]);
   await audit(pool, userId, "export");
   return {
@@ -74,6 +79,7 @@ export async function exportData(
     messages,
     summaries: summaries.rows,
     memories: memories.rows,
+    outbound_recipients: recipients.rows,
     settings: {
       retention_days: user.rows[0].retention_days,
       paused: user.rows[0].paused,

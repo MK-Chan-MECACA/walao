@@ -3,6 +3,7 @@ import type { GatewayPort } from "./gateway/port.ts";
 import type { Config } from "./config.ts";
 import { verifyHmac } from "./crypto.ts";
 import { applyGatewayStatus } from "./connections.ts";
+import { handleRecipientReply } from "./tier1.ts";
 
 export type IngestResult =
   | { status: 202 } // accepted (or idempotent replay — both are 202, no trace difference)
@@ -56,7 +57,7 @@ export async function ingestWebhook(
   // payload is never persisted anywhere. All drops still answer 202 so the
   // response doesn't leak which groups a user subscribes to.
   const sub = await pool.query(
-    `SELECT s.id AS session_id, s.status AS session_status, u.paused, g.id AS group_id, g.enabled
+    `SELECT s.id AS session_id, s.status AS session_status, u.id AS user_id, u.paused, g.id AS group_id, g.enabled
      FROM whatsapp_sessions s
      JOIN users u ON u.id = s.user_id
      LEFT JOIN groups g ON g.session_id = s.id AND g.external_jid = $2
@@ -64,14 +65,26 @@ export async function ingestWebhook(
     [evt.sessionExternalId, evt.groupJid],
   );
   if (sub.rows.length === 0) return { status: 202 }; // unknown session: unattributable, drop
-  const { session_id: sessionId, session_status: sessionStatus, paused, group_id: groupId, enabled } =
-    sub.rows[0];
+  const {
+    session_id: sessionId,
+    session_status: sessionStatus,
+    user_id: userId,
+    paused,
+    group_id: groupId,
+    enabled,
+  } = sub.rows[0];
   // Disconnect boundary (ticket 3): a non-connected session ingests nothing —
   // not even group discovery. Silent 202 like the consent drops.
   if (sessionStatus !== "connected") return { status: 202 };
   // Pause boundary (ticket 10): a paused user ingests nothing either — the
   // event is dropped before any write, group discovery included.
   if (paused) return { status: 202 };
+  // Tier 1 handshake (ticket 13): a DM from an outbound recipient is consumed
+  // here — "Yes" flips the handshake to confirmed, anything else leaves it
+  // pending. Recipient DMs are never stored and never registered as groups.
+  // Enabled groups skip the lookup (a recipient chat is never an enabled group).
+  if (!enabled && (await handleRecipientReply(pool, userId, evt.groupJid, evt.text)))
+    return { status: 202 };
   if (!groupId) {
     // First sighting: register the group (metadata only, disabled by default)
     // so it shows up in the user's list to enable. The message itself is dropped.

@@ -66,6 +66,18 @@ export class FakeGateway implements GatewayPort {
   async sendToSelf(sessionExternalId: string, text: string): Promise<void> {
     this.sends.push({ sessionExternalId, text });
   }
+
+  // Tier 1 sends land in their own array so Tier 0 boundary assertions on
+  // `sends` stay exact.
+  recipientSends: { sessionExternalId: string; recipientJid: string; text: string }[] = [];
+
+  async sendToRecipient(
+    sessionExternalId: string,
+    recipientJid: string,
+    text: string,
+  ): Promise<void> {
+    this.recipientSends.push({ sessionExternalId, recipientJid, text });
+  }
 }
 
 // Fake SummarizerPort — the AI-pipeline test seam: canned structured JSON out,
@@ -247,6 +259,7 @@ export async function makeHarness(): Promise<Harness> {
     deliver: () => deliverSummaries(pool, gateway),
     async reset() {
       gateway.sends = [];
+      gateway.recipientSends = [];
       summarizer.canned = {};
       summarizer.calls = [];
       summarizer.fail = false;

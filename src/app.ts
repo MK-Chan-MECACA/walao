@@ -38,6 +38,7 @@ import {
   updateMemory,
 } from "./memory.ts";
 import { askQuestion, type AnswererPort } from "./ask.ts";
+import { enableTier1, sendOutbound } from "./tier1.ts";
 
 export type App = {
   handler: (req: IncomingMessage, res: ServerResponse) => void;
@@ -248,6 +249,49 @@ export function createApp(deps: {
           return;
         }
         send(res, 200, result);
+        return;
+      }
+
+      if (req.method === "POST" && url.pathname === "/v1/tier1") {
+        const body = await readJsonBody(req);
+        if (body === undefined) {
+          send(res, 400, { error: "bad_json" });
+          return;
+        }
+        const result = await enableTier1(
+          pool,
+          userId,
+          (body as Record<string, unknown>).authorization_version,
+        );
+        if (result === "authorization_required") {
+          send(res, 400, { error: "authorization_required" });
+          return;
+        }
+        send(res, 200, result);
+        return;
+      }
+
+      if (req.method === "POST" && url.pathname === "/v1/outbound") {
+        const body = await readJsonBody(req);
+        if (body === undefined) {
+          send(res, 400, { error: "bad_json" });
+          return;
+        }
+        const b = body as Record<string, unknown>;
+        const result = await sendOutbound(pool, gateway, userId, b.recipient, b.text);
+        if (result === "invalid") {
+          send(res, 400, { error: "invalid_outbound" });
+          return;
+        }
+        if (result === "tier1_required") {
+          send(res, 403, { error: "tier1_required" });
+          return;
+        }
+        if (typeof result === "string") {
+          send(res, 409, { error: result }); // paused | not_connected | handshake_pending
+          return;
+        }
+        send(res, 201, result);
         return;
       }
 

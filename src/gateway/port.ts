@@ -35,7 +35,11 @@ export interface GatewayPort {
   startPairing(): Promise<{ externalSessionId: string; pairingCode: string }>;
 
   // Tier 0 outbound: deliver text to the session owner's own "Message Yourself"
-  // chat. Deliberately takes NO recipient — the port cannot express a send to a
-  // group JID or anyone else, so the Tier 0 boundary (spec §46) is structural.
+  // chat. Deliberately takes NO recipient — everything Tier 0 sends goes through
+  // this method, so the spec §46 boundary holds for every non-opted-in user.
   sendToSelf(externalSessionId: string, text: string): Promise<void>;
+
+  // Tier 1 outbound (spec §47–48): deliver text to another JID. Never call
+  // directly — tier1.ts owns the opt-in check and the recipient "Yes" handshake.
+  sendToRecipient(externalSessionId: string, recipientJid: string, text: string): Promise<void>;
 }
