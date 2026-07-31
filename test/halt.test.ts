@@ -23,12 +23,7 @@ beforeEach(async () => {
   await h.reset();
 });
 
-function opPost(path: string, secret: string): Promise<Response> {
-  return fetch(`${h.baseUrl}${path}`, {
-    method: "POST",
-    headers: { "x-walao-operator-secret": secret },
-  });
-}
+const opPost = (path: string, secret: string) => h.op("POST", path, undefined, secret);
 
 const PAYLOAD = {
   highlights: [{ text: "big news", sources: [] }],

@@ -1,7 +1,6 @@
 import { after, before, beforeEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { makeHarness, type Harness } from "./helpers.ts";
-import { emptySummary, type SummaryPayload } from "../src/summarize.ts";
 import type { Memory, MemoryCandidate, WeeklyReview } from "../src/memory.ts";
 
 let h: Harness;
@@ -15,29 +14,6 @@ after(async () => {
 beforeEach(async () => {
   await h.reset();
 });
-
-async function seedSummary(
-  userId: string,
-  groupId: string,
-  payload: Partial<SummaryPayload>,
-  createdAt: Date = new Date(),
-): Promise<string> {
-  const { rows } = await h.pool.query(
-    `INSERT INTO summaries
-       (user_id, group_id, language, window_start, window_end, payload,
-        model, prompt_version, input_tokens, output_tokens, duration_ms, created_at)
-     VALUES ($1, $2, 'en', $3, $4, $5, 't', 't', 0, 0, 0, $6) RETURNING id`,
-    [
-      userId,
-      groupId,
-      new Date(createdAt.getTime() - 3600_000),
-      createdAt,
-      JSON.stringify({ ...emptySummary(), ...payload }),
-      createdAt,
-    ],
-  );
-  return rows[0].id;
-}
 
 async function seedTenant(token: string): Promise<{ userId: string; groupId: string }> {
   const userId = await h.seedUser(token);
@@ -67,10 +43,10 @@ async function memories(token: string): Promise<Memory[]> {
 describe("memory beta", () => {
   it("candidates from summaries appear for review with source references, tenant-scoped", async () => {
     const { userId, groupId } = await seedTenant("tok-a");
-    const sid = await seedSummary(userId, groupId, CANDIDATE);
+    const sid = await h.seedSummary(userId, groupId, CANDIDATE);
     // Another tenant's candidate must not leak in.
     const other = await seedTenant("tok-b");
-    await seedSummary(other.userId, other.groupId, CANDIDATE);
+    await h.seedSummary(other.userId, other.groupId, CANDIDATE);
 
     const list = await candidates("tok-a");
     assert.equal(list.length, 1);
@@ -83,13 +59,13 @@ describe("memory beta", () => {
 
   it("an unconfirmed candidate expires with its window; a confirmed one persists until deleted", async () => {
     const { userId, groupId } = await seedTenant("tok-a");
-    const expiredSid = await seedSummary(
+    const expiredSid = await h.seedSummary(
       userId,
       groupId,
       CANDIDATE,
-      new Date(Date.now() - 8 * 24 * 3600_000), // clock 8 days past proposal
+      { at: new Date(Date.now() - 8 * 24 * 3600_000) }, // clock 8 days past proposal
     );
-    const freshSid = await seedSummary(userId, groupId, CANDIDATE);
+    const freshSid = await h.seedSummary(userId, groupId, CANDIDATE);
 
     // Only the in-window candidate is up for review; the expired one is gone
     // and can no longer be confirmed.
@@ -126,7 +102,7 @@ describe("memory beta", () => {
 
   it("confirmed memories are listable, editable, exportable, deletable, and idempotent to confirm", async () => {
     const { userId, groupId } = await seedTenant("tok-a");
-    const sid = await seedSummary(userId, groupId, CANDIDATE);
+    const sid = await h.seedSummary(userId, groupId, CANDIDATE);
     const path = `/v1/summaries/${sid}/memory-candidates/0/confirm`;
     const created = (await h.api("tok-a", "POST", path)).body as Memory;
     // Confirming twice stays one memory; the confirmed candidate leaves review.
@@ -162,7 +138,7 @@ describe("memory beta", () => {
 
   it("each memory exposes content, source, created-at, confirmer, and last-used-at", async () => {
     const { userId, groupId } = await seedTenant("tok-a");
-    const sid = await seedSummary(userId, groupId, CANDIDATE);
+    const sid = await h.seedSummary(userId, groupId, CANDIDATE);
     const mem = (await h.api("tok-a", "POST", `/v1/summaries/${sid}/memory-candidates/0/confirm`))
       .body as Memory;
     assert.equal(mem.content, "Supplier A's payment term is 30 days");
@@ -180,7 +156,7 @@ describe("memory beta", () => {
   it("weekly review digests decisions, overdue items, and recurring risks daily briefs miss", async () => {
     const { userId, groupId } = await seedTenant("tok-a");
     // Two summaries days apart — outside any single Today Brief window.
-    const s1 = await seedSummary(
+    const s1 = await h.seedSummary(
       userId,
       groupId,
       {
@@ -190,9 +166,9 @@ describe("memory beta", () => {
           { text: "Send invoice", source_message_ids: ["m3"], owner: null, due_at: "2026-07-01T00:00:00Z", confidence: 1 },
         ],
       },
-      new Date(Date.now() - 5 * 24 * 3600_000),
+      { at: new Date(Date.now() - 5 * 24 * 3600_000) },
     );
-    await seedSummary(userId, groupId, {
+    await h.seedSummary(userId, groupId, {
       open_questions: [
         { text: "who owns the audit?", source_message_ids: ["m4"] }, // recurring (case-insensitive)
         { text: "One-off question", source_message_ids: ["m5"] },

@@ -7,7 +7,9 @@ import { signHmac, hashToken, encrypt } from "../src/crypto.ts";
 import type { Config } from "../src/config.ts";
 import type { GatewayEvent, GatewayPort, SessionStatus } from "../src/gateway/port.ts";
 import {
+  emptySummary,
   processSummaryJobs,
+  type SummaryPayload,
   type SummarizerInput,
   type SummarizerPort,
   type SummarizerResult,
@@ -162,6 +164,13 @@ export type Harness = {
     sentAt: string,
     opts?: { text?: string; fromMe?: boolean },
   ) => Promise<string>;
+  seedSummary: (
+    userId: string,
+    groupId: string,
+    payload?: Partial<SummaryPayload>,
+    opts?: { at?: Date; language?: string },
+  ) => Promise<string>;
+  op: (method: string, path: string, body?: unknown, secret?: string) => Promise<Response>;
   gateway: FakeGateway;
   summarizer: FakeSummarizer;
   answerer: FakeAnswerer;
@@ -253,6 +262,36 @@ export async function makeHarness(): Promise<Harness> {
         [groupId, externalId, sentAt, encrypt(opts?.text ?? "seeded", config.encKey), opts?.fromMe ?? false],
       );
       return rows[0].id;
+    },
+    // One-hour summary window ending at `at` (default now); created_at follows
+    // `at` so recency-filtered surfaces see the summary where its window sits.
+    async seedSummary(userId, groupId, payload = {}, opts) {
+      const at = opts?.at ?? new Date();
+      const { rows } = await pool.query(
+        `INSERT INTO summaries
+           (user_id, group_id, language, window_start, window_end, payload,
+            model, prompt_version, input_tokens, output_tokens, duration_ms, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, 't', 't', 0, 0, 0, $5) RETURNING id`,
+        [
+          userId,
+          groupId,
+          opts?.language ?? "en",
+          new Date(at.getTime() - 3600_000),
+          at,
+          JSON.stringify({ ...emptySummary(), ...payload }),
+        ],
+      );
+      return rows[0].id;
+    },
+    op(method, path, body, secret = OPERATOR_SECRET) {
+      return fetch(`${baseUrl}${path}`, {
+        method,
+        headers: {
+          "x-walao-operator-secret": secret,
+          ...(body !== undefined ? { "content-type": "application/json" } : {}),
+        },
+        body: body !== undefined ? JSON.stringify(body) : undefined,
+      });
     },
     gateway,
     summarizer,

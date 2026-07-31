@@ -1,7 +1,6 @@
 import { after, before, beforeEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { buildEvent, makeHarness, type Harness } from "./helpers.ts";
-import { emptySummary, type SummaryPayload } from "../src/summarize.ts";
 import { tickScheduler } from "../src/scheduler.ts";
 
 let h: Harness;
@@ -15,22 +14,6 @@ after(async () => {
 beforeEach(async () => {
   await h.reset();
 });
-
-async function seedSummary(
-  userId: string,
-  groupId: string,
-  payload: Partial<SummaryPayload>,
-): Promise<string> {
-  const { rows } = await h.pool.query(
-    `INSERT INTO summaries
-       (user_id, group_id, language, window_start, window_end, payload,
-        model, prompt_version, input_tokens, output_tokens, duration_ms)
-     VALUES ($1, $2, 'en', now() - interval '1 hour', now(), $3, 't', 't', 0, 0, 0)
-     RETURNING id`,
-    [userId, groupId, JSON.stringify({ ...emptySummary(), ...payload })],
-  );
-  return rows[0].id;
-}
 
 async function count(sql: string, params: unknown[]): Promise<number> {
   const { rows } = await h.pool.query(`SELECT count(*)::int AS n FROM (${sql}) q`, params);
@@ -106,7 +89,7 @@ describe("privacy controls", () => {
       [groupId],
     );
     assert.equal(await h.summarize(), 0);
-    await seedSummary(userId, groupId, {});
+    await h.seedSummary(userId, groupId, {});
     assert.equal(await h.deliver(), 0);
     assert.equal(h.gateway.sends.length, 0);
 
@@ -125,7 +108,7 @@ describe("privacy controls", () => {
     const sessionId = await h.seedSession(userId, "sess-1");
     const groupId = await h.seedGroup(sessionId, "g1@g.us");
     await h.seedMessage(groupId, "m1", new Date().toISOString(), { text: "hello export" });
-    await seedSummary(userId, groupId, {
+    await h.seedSummary(userId, groupId, {
       decisions: [{ text: "Ship it", source_message_ids: ["m1"] }],
     });
     await h.api("tok-a", "PUT", `/v1/groups/${groupId}/schedule`, {
@@ -171,12 +154,12 @@ describe("privacy controls", () => {
 
     await h.seedMessage(gA, "a1", new Date().toISOString(), { text: MARKER });
     await h.seedMessage(gB, "b1", new Date().toISOString(), { text: "keep me" });
-    const sidA = await seedSummary(userId, gA, {
+    const sidA = await h.seedSummary(userId, gA, {
       action_items: [
         { text: MARKER, source_message_ids: ["a1"], owner: null, due_at: null, confidence: 1 },
       ],
     });
-    const sidB = await seedSummary(userId, gB, {
+    const sidB = await h.seedSummary(userId, gB, {
       highlights: [{ text: "b-side", source_message_ids: ["b1"] }],
     });
     // Derived data: item state + confirmed reminder copied from A's summary.
@@ -214,7 +197,7 @@ describe("privacy controls", () => {
     const sessionId = await h.seedSession(userId, "sess-1");
     const groupId = await h.seedGroup(sessionId, "g1@g.us");
     await h.seedMessage(groupId, "m1", new Date().toISOString(), { text: MARKER });
-    const sid = await seedSummary(userId, groupId, {
+    const sid = await h.seedSummary(userId, groupId, {
       action_items: [
         { text: MARKER, source_message_ids: ["m1"], owner: null, due_at: null, confidence: 1 },
       ],

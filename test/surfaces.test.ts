@@ -1,7 +1,6 @@
 import { after, before, beforeEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { makeHarness, type Harness } from "./helpers.ts";
-import { emptySummary, type SummaryPayload } from "../src/summarize.ts";
 import type { Reminder, SummaryHistoryEntry } from "../src/surfaces.ts";
 import type { TodayBrief } from "../src/brief.ts";
 
@@ -16,29 +15,6 @@ after(async () => {
 beforeEach(async () => {
   await h.reset();
 });
-
-async function seedSummary(
-  userId: string,
-  groupId: string,
-  payload: Partial<SummaryPayload>,
-  createdAt: Date = new Date(),
-): Promise<string> {
-  const { rows } = await h.pool.query(
-    `INSERT INTO summaries
-       (user_id, group_id, language, window_start, window_end, payload,
-        model, prompt_version, input_tokens, output_tokens, duration_ms, created_at)
-     VALUES ($1, $2, 'en', $3, $4, $5, 't', 't', 0, 0, 0, $6) RETURNING id`,
-    [
-      userId,
-      groupId,
-      new Date(createdAt.getTime() - 3600_000),
-      createdAt,
-      JSON.stringify({ ...emptySummary(), ...payload }),
-      createdAt,
-    ],
-  );
-  return rows[0].id;
-}
 
 async function listHistory(token: string): Promise<SummaryHistoryEntry[]> {
   const res = await h.api(token, "GET", "/v1/summaries");
@@ -64,15 +40,15 @@ describe("app surfaces", () => {
     const userId = await h.seedUser("tok-a");
     const sessionId = await h.seedSession(userId, "sess-1");
     const g1 = await h.seedGroup(sessionId, "g1@g.us");
-    const recent = await seedSummary(userId, g1, {
+    const recent = await h.seedSummary(userId, g1, {
       decisions: [{ text: "Approved budget", source_message_ids: ["m1"] }],
     });
-    await seedSummary(userId, g1, {}, new Date(Date.now() - 100 * 24 * 3600_000));
+    await h.seedSummary(userId, g1, {}, { at: new Date(Date.now() - 100 * 24 * 3600_000) });
     // Another tenant's summary must not leak in.
     const otherId = await h.seedUser("tok-b");
     const otherSess = await h.seedSession(otherId, "sess-o");
     const og = await h.seedGroup(otherSess, "go@g.us");
-    await seedSummary(otherId, og, {});
+    await h.seedSummary(otherId, og, {});
 
     const list = await listHistory("tok-a");
     assert.equal(list.length, 1);
@@ -90,7 +66,7 @@ describe("app surfaces", () => {
     const userId = await h.seedUser("tok-a");
     const sessionId = await h.seedSession(userId, "sess-1");
     const g1 = await h.seedGroup(sessionId, "g1@g.us");
-    const sid = await seedSummary(userId, g1, {
+    const sid = await h.seedSummary(userId, g1, {
       highlights: [
         { text: "One", source_message_ids: ["m1"] },
         { text: "Two", source_message_ids: ["m2"] },
@@ -130,7 +106,7 @@ describe("app surfaces", () => {
     const userId = await h.seedUser("tok-a");
     const sessionId = await h.seedSession(userId, "sess-1");
     const g1 = await h.seedGroup(sessionId, "g1@g.us");
-    const sid = await seedSummary(userId, g1, ACTION);
+    const sid = await h.seedSummary(userId, g1, ACTION);
 
     // Two extracted action items, zero reminders — extraction alone triggers nothing.
     let reminders = (await h.api("tok-a", "GET", "/v1/reminders")).body as { reminders: Reminder[] };
@@ -166,7 +142,7 @@ describe("app surfaces", () => {
     const userId = await h.seedUser("tok-a");
     const sessionId = await h.seedSession(userId, "sess-1");
     const g1 = await h.seedGroup(sessionId, "g1@g.us");
-    const sid = await seedSummary(userId, g1, ACTION);
+    const sid = await h.seedSummary(userId, g1, ACTION);
     // Body overrides beat the extracted defaults at confirmation time.
     const created = (
       await h.api("tok-a", "POST", `/v1/summaries/${sid}/action-items/1/confirm`, {
