@@ -1,12 +1,20 @@
-import type { GatewayPort, NormalizedEvent } from "./port.ts";
+import type { GatewayEvent, GatewayPort, NormalizedEvent, SessionStatus } from "./port.ts";
 
-// WAAPI prototype adapter. This is the ONLY module that knows WAAPI's wire shape.
-// Verified against commit fa1c2fe (2026-07-26); re-verify payload shape before
-// relying on it (spec §Further Notes).
+// WAAPI Gateway adapter (github.com/mecaca-global-inc/waapi-gateway).
+// This is the ONLY module that knows the gateway's wire shape.
+// Verified against a live gateway on 2026-07-31.
 //
-// Expected payload (message event):
-//   { "event":"message", "session":"<id>",
-//     "payload": { "id","chatId","chatName","from","fromMe","timestamp","body","hasMedia" } }
+// Message event:
+//   { "event":"message", "session":"<name>", "timestamp":<unix s>,
+//     "payload": { "id","chat","sender","addressing_mode","from_me",
+//                  "timestamp","push_name","body","has_media","sender_alt"? } }
+//
+// Status events: "session.status" {status}, "state.pair" {jid},
+//   "state.qr" {code}, "state.loggedout" {reason,on_connect}.
+//
+// Note the gateway carries no chat NAME on message events (only push_name, the
+// sender's display name), so groupName is always null here — group titles come
+// from GET /api/{session}/groups, not the webhook.
 
 function asRecord(v: unknown): Record<string, unknown> {
   if (typeof v !== "object" || v === null) throw new Error("payload is not an object");
@@ -18,47 +26,142 @@ function str(v: unknown, field: string): string {
   return v;
 }
 
+// Gateway session states -> WALAO's three. STARTING is the reconnect path, so
+// it counts as disconnected: coverage_gaps opens for the blip and closes when
+// WORKING returns, which is exactly the "incomplete window" the spec wants.
+// SCAN_QR / logged-out need the user to act, so they are re_pair_required.
+const STATUS_MAP: Record<string, SessionStatus> = {
+  WORKING: "connected",
+  STARTING: "disconnected",
+  STOPPED: "disconnected",
+  FAILED: "disconnected",
+  SCAN_QR: "re_pair_required",
+};
+
+// Strip WhatsApp's device/agent suffix: "60123456789:13@s.whatsapp.net" is one
+// linked device, not the chat. Sending to it targets a single device.
+function toChatId(jid: string): string {
+  const [user] = jid.split("@");
+  return (user ?? "").split(":")[0] ?? "";
+}
+
 export class WaapiGateway implements GatewayPort {
-  parse(payload: unknown): NormalizedEvent {
+  readonly baseUrl: string;
+  readonly apiKey: string;
+
+  constructor(baseUrl: string, apiKey: string) {
+    this.baseUrl = baseUrl;
+    this.apiKey = apiKey;
+  }
+
+  parse(payload: unknown): GatewayEvent {
     const root = asRecord(payload);
-    // ponytail: only message events mapped; add WAAPI session-status event
-    // mapping once its wire shape is verified against a live gateway.
-    if (root.event !== "message") throw new Error(`unsupported event: ${String(root.event)}`);
+    const event = root.event;
     const sessionExternalId = str(root.session, "session");
-    const msg = asRecord(root.payload);
 
-    // WAAPI timestamps are unix seconds.
-    const ts = msg.timestamp;
-    if (typeof ts !== "number" || !Number.isFinite(ts)) throw new Error("missing/invalid timestamp");
+    if (event === "message") {
+      const msg = asRecord(root.payload);
+      // Gateway timestamps are unix seconds.
+      const ts = msg.timestamp;
+      if (typeof ts !== "number" || !Number.isFinite(ts)) {
+        throw new Error("missing/invalid timestamp");
+      }
+      const normalized: NormalizedEvent = {
+        type: "message",
+        sessionExternalId,
+        groupJid: str(msg.chat, "chat"),
+        groupName: null,
+        externalMessageId: str(msg.id, "id"),
+        senderRef: typeof msg.sender === "string" ? msg.sender : null,
+        text: typeof msg.body === "string" ? msg.body : "",
+        sentAt: new Date(ts * 1000),
+        fromMe: msg.from_me === true,
+      };
+      return normalized;
+    }
 
-    return {
-      type: "message",
-      sessionExternalId,
-      groupJid: str(msg.chatId, "chatId"),
-      groupName: typeof msg.chatName === "string" ? msg.chatName : null,
-      externalMessageId: str(msg.id, "id"),
-      senderRef: typeof msg.from === "string" ? msg.from : null,
-      text: typeof msg.body === "string" ? msg.body : "",
-      sentAt: new Date(ts * 1000),
-      fromMe: msg.fromMe === true,
-    };
+    if (event === "session.status") {
+      const status = STATUS_MAP[str(asRecord(root.payload).status, "status")];
+      if (!status) throw new Error("unsupported session status");
+      return { type: "status", sessionExternalId, status };
+    }
+
+    // state.pair rides alongside session.status WORKING and state.qr alongside
+    // SCAN_QR; both are handled so a dropped session.status still converges.
+    if (event === "state.pair") return { type: "status", sessionExternalId, status: "connected" };
+    if (event === "state.qr" || event === "state.loggedout") {
+      return { type: "status", sessionExternalId, status: "re_pair_required" };
+    }
+
+    throw new Error(`unsupported event: ${String(event)}`);
   }
 
-  // ponytail: needs the WAAPI REST client (create session + fetch QR/code);
-  // wire it when a real gateway is provisioned. FakeGateway covers ticket 3.
-  startPairing(): Promise<{ externalSessionId: string; pairingCode: string }> {
-    return Promise.reject(new Error("WAAPI pairing not implemented"));
+  // Errors are Fiber defaults — plain text, not JSON — so the body is read as
+  // text and never JSON.parsed.
+  private async call(method: string, path: string, body?: unknown): Promise<unknown> {
+    if (!this.apiKey) throw new Error("WAAPI_API_KEY not configured");
+    const res = await fetch(`${this.baseUrl}${path}`, {
+      method,
+      headers: {
+        "x-api-key": this.apiKey,
+        ...(body === undefined ? {} : { "content-type": "application/json" }),
+      },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    if (!res.ok) {
+      throw new Error(`waapi ${method} ${path} -> ${res.status} ${(await res.text()).trim()}`);
+    }
+    return res.status === 204 ? null : await res.json();
   }
 
-  // ponytail: needs the WAAPI REST client (send to the session's own JID);
-  // wire it when a real gateway is provisioned. FakeGateway covers ticket 7.
-  sendToSelf(): Promise<void> {
-    return Promise.reject(new Error("WAAPI sendToSelf not implemented"));
+  // Create + start a session, then wait for the QR string. The gateway has no
+  // push for this on the REST side, so it is polled — the same thing its own
+  // dashboard does.
+  // ponytail: fixed 30s ceiling; the gateway's /ws stream would push instead if
+  // pairing latency ever matters.
+  async startPairing(): Promise<{ externalSessionId: string; pairingCode: string }> {
+    const name = `walao-${crypto.randomUUID().slice(0, 8)}`;
+    await this.call("POST", "/api/sessions", { name });
+    await this.call("POST", `/api/sessions/${name}/start`, {});
+
+    for (let i = 0; i < 30; i++) {
+      const qr = asRecord(await this.call("GET", `/api/${name}/auth/qr`));
+      if (typeof qr.code === "string" && qr.code.length > 0) {
+        return { externalSessionId: name, pairingCode: qr.code };
+      }
+      await new Promise((r) => setTimeout(r, 1000));
+    }
+    throw new Error("waapi pairing: no QR after 30s");
   }
 
-  // ponytail: needs the WAAPI REST client (send to an arbitrary JID); wire it
-  // when a real gateway is provisioned. FakeGateway covers ticket 13.
-  sendToRecipient(): Promise<void> {
-    return Promise.reject(new Error("WAAPI sendToRecipient not implemented"));
+  async sendToSelf(externalSessionId: string, text: string): Promise<void> {
+    const me = asRecord(await this.call("GET", `/api/${externalSessionId}/me`));
+    await this.sendText(externalSessionId, toChatId(str(me.jid, "jid")), text);
+  }
+
+  async sendToRecipient(
+    externalSessionId: string,
+    recipientJid: string,
+    text: string,
+  ): Promise<void> {
+    await this.sendText(externalSessionId, recipientJid, text);
+  }
+
+  async listGroups(
+    externalSessionId: string,
+  ): Promise<Array<{ jid: string; name: string | null }>> {
+    const rows = await this.call("GET", `/api/${externalSessionId}/groups`);
+    if (!Array.isArray(rows)) throw new Error("waapi groups: expected array");
+    return rows.map((r) => {
+      const g = asRecord(r);
+      return {
+        jid: str(g.jid, "jid"),
+        name: typeof g.name === "string" && g.name.length > 0 ? g.name : null,
+      };
+    });
+  }
+
+  private async sendText(session: string, chatId: string, text: string): Promise<void> {
+    await this.call("POST", "/api/sendText", { session, chat_id: chatId, text });
   }
 }

@@ -8,6 +8,8 @@ export type Config = {
   encKey: Buffer; // 32 bytes for AES-256-GCM
   freshnessSeconds: number;
   port: number;
+  waapiBaseUrl: string;
+  waapiApiKey: string; // empty until a gateway is provisioned; adapter fails loud on use
 };
 
 function required(name: string): string {
@@ -28,5 +30,9 @@ export function loadConfig(): Config {
     encKey,
     freshnessSeconds: Number(process.env.WALAO_FRESHNESS_SECONDS ?? 300),
     port: Number(process.env.PORT ?? 3000),
+    // Not required(): the fakes cover every test, and a WALAO instance boots
+    // fine without a gateway — the adapter throws when actually asked to talk.
+    waapiBaseUrl: (process.env.WAAPI_BASE_URL ?? "http://localhost:8080").replace(/\/+$/, ""),
+    waapiApiKey: process.env.WAAPI_API_KEY ?? "",
   };
 }

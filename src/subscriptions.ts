@@ -1,5 +1,6 @@
 import type pg from "pg";
 import { PLANS } from "./billing.ts";
+import type { GatewayPort } from "./gateway/port.ts";
 
 // Bump when the attestation wording shown to the user changes. Enabling
 // requires the client to echo the current version, proving the user saw the
@@ -134,4 +135,43 @@ export async function listConsentRecords(
     [userId],
   );
   return rows.map((r) => ({ ...r, created_at: new Date(r.created_at).toISOString() }));
+}
+
+// Backfill group titles. Discovery registers a group the first time a message
+// arrives, but providers may not carry the chat name on message events (WAAPI
+// does not), so those rows land unnamed. One gateway call per session that
+// still has an unnamed group; sessions with every name filled cost nothing.
+// Metadata only — no message content is read or written here.
+export async function backfillGroupNames(pool: pg.Pool, gateway: GatewayPort): Promise<number> {
+  const { rows: sessions } = await pool.query(
+    `SELECT DISTINCT s.external_session_id
+     FROM groups g
+     JOIN whatsapp_sessions s ON s.id = g.session_id
+     WHERE g.name IS NULL AND s.status = 'connected'`,
+  );
+
+  let named = 0;
+  for (const { external_session_id: sessionExternalId } of sessions) {
+    let groups;
+    try {
+      groups = await gateway.listGroups(sessionExternalId);
+    } catch {
+      continue; // gateway down or session gone: the next pass retries
+    }
+    for (const g of groups) {
+      if (!g.name) continue;
+      // Only ever fills a NULL — a name already stored is never overwritten.
+      const res = await pool.query(
+        `UPDATE groups SET name = $3
+         FROM whatsapp_sessions s
+         WHERE groups.session_id = s.id
+           AND s.external_session_id = $1
+           AND groups.external_jid = $2
+           AND groups.name IS NULL`,
+        [sessionExternalId, g.jid, g.name],
+      );
+      named += res.rowCount ?? 0;
+    }
+  }
+  return named;
 }

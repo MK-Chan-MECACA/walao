@@ -79,7 +79,13 @@ export function createApp(deps: {
         return;
       }
       const raw = await readRawBody(req);
-      const sig = header(req, "x-walao-signature");
+      // WAAPI Gateway signs as `X-Webhook-Signature: sha256=<hex>`; the native
+      // header stays accepted so existing senders keep working. Both are the
+      // same HMAC-SHA256 over the raw body, so only the encoding differs.
+      const sig = (header(req, "x-webhook-signature") || header(req, "x-walao-signature")).replace(
+        /^sha256=/,
+        "",
+      );
       const result = await ingestWebhook(pool, gateway, config, raw, sig);
       send(res, result.status, null);
       return;

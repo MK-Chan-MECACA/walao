@@ -42,4 +42,9 @@ export interface GatewayPort {
   // Tier 1 outbound (spec §47–48): deliver text to another JID. Never call
   // directly — tier1.ts owns the opt-in check and the recipient "Yes" handshake.
   sendToRecipient(externalSessionId: string, recipientJid: string, text: string): Promise<void>;
+
+  // Group titles for a session. Providers may not carry the chat name on
+  // message events (WAAPI does not), so discovery registers groups unnamed and
+  // names are backfilled from here. Metadata only — never message content.
+  listGroups(externalSessionId: string): Promise<Array<{ jid: string; name: string | null }>>;
 }

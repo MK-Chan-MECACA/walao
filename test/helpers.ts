@@ -28,6 +28,9 @@ export function testConfig(): Config {
     encKey: randomBytes(32),
     freshnessSeconds: 300,
     port: 0,
+    // Unused: every test drives the FakeGateway, never a real WAAPI instance.
+    waapiBaseUrl: "http://127.0.0.1:1",
+    waapiApiKey: "",
   };
 }
 
@@ -81,6 +84,16 @@ export class FakeGateway implements GatewayPort {
     text: string,
   ): Promise<void> {
     this.recipientSends.push({ sessionExternalId, recipientJid, text });
+  }
+
+  // Group titles the fake gateway will report, keyed by session id. Tests that
+  // exercise the name backfill set this; everyone else gets an empty list.
+  groupNames: Record<string, Array<{ jid: string; name: string | null }>> = {};
+
+  async listGroups(
+    sessionExternalId: string,
+  ): Promise<Array<{ jid: string; name: string | null }>> {
+    return this.groupNames[sessionExternalId] ?? [];
   }
 }
 
