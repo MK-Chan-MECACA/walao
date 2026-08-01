@@ -43,6 +43,7 @@ import { isHalted, setHalted } from "./halt.ts";
 import { getStatus } from "./block.ts";
 import { recordReview, reviewQueue } from "./quality.ts";
 import { getUsage } from "./billing.ts";
+import { login, signup, verify, type SendCode } from "./accounts.ts";
 import { hashToken } from "./crypto.ts";
 import { timingSafeEqual } from "node:crypto";
 
@@ -59,8 +60,16 @@ export function createApp(deps: {
   gateway: GatewayPort;
   answerer: AnswererPort;
   config: Config;
+  sendCode?: SendCode;
 }): App {
   const { pool, gateway, answerer, config } = deps;
+  // ponytail: no mail transport yet — the code goes to the log. Wire SMTP or a
+  // provider here when a real user has to receive one.
+  const sendCode: SendCode =
+    deps.sendCode ??
+    (async (email, code) => {
+      console.log(`[walao] login code for ${email}: ${code}`);
+    });
 
   const handler = (req: IncomingMessage, res: ServerResponse): void => {
     void route(req, res).catch((err) => {
@@ -141,7 +150,43 @@ export function createApp(deps: {
       return;
     }
 
-    // Everything under /v1 is authenticated and tenant-scoped.
+    // Account identity (ticket 18). These three are the only unauthenticated
+    // /v1 routes — they are how a caller gets a credential in the first place.
+    if (
+      req.method === "POST" &&
+      (url.pathname === "/v1/signup" ||
+        url.pathname === "/v1/login" ||
+        url.pathname === "/v1/verify")
+    ) {
+      const body = await readJsonBody(req);
+      if (body === undefined) {
+        send(res, 400, { error: "bad_json" });
+        return;
+      }
+      const b = body as Record<string, unknown>;
+
+      if (url.pathname === "/v1/verify") {
+        const result = await verify(pool, b.email, b.code);
+        if (result === "invalid") {
+          send(res, 400, { error: "invalid_code" });
+          return;
+        }
+        send(res, 200, result);
+        return;
+      }
+
+      const issue = url.pathname === "/v1/signup" ? signup : login;
+      if ((await issue(pool, sendCode, b.email)) === "invalid") {
+        send(res, 400, { error: "invalid_email" });
+        return;
+      }
+      // Always 202, known address or not: the answer must not reveal whether
+      // an Account exists.
+      send(res, 202, { ok: true });
+      return;
+    }
+
+    // Everything else under /v1 is authenticated and tenant-scoped.
     if (url.pathname.startsWith("/v1/")) {
       const userId = await authenticate(pool, bearer(req));
       if (!userId) {

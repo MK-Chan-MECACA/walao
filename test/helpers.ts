@@ -187,6 +187,8 @@ export type Harness = {
     opts?: { at?: Date; language?: string },
   ) => Promise<string>;
   op: (method: string, path: string, body?: unknown, secret?: string) => Promise<Response>;
+  // Every login code the app "mailed", in order — the mail seam for ticket 18.
+  codes: { email: string; code: string }[];
   gateway: FakeGateway;
   summarizer: FakeSummarizer;
   answerer: FakeAnswerer;
@@ -202,7 +204,16 @@ export async function makeHarness(): Promise<Harness> {
   await migrate(pool);
   const gateway = new FakeGateway();
   const answerer = new FakeAnswerer();
-  const app = createApp({ pool, gateway, answerer, config });
+  const codes: { email: string; code: string }[] = [];
+  const app = createApp({
+    pool,
+    gateway,
+    answerer,
+    config,
+    sendCode: async (email, code) => {
+      codes.push({ email, code });
+    },
+  });
   const summarizer = new FakeSummarizer();
   const server: Server = createServer(app.handler);
   await new Promise<void>((resolve) => server.listen(0, resolve));
@@ -309,12 +320,14 @@ export async function makeHarness(): Promise<Harness> {
         body: body !== undefined ? JSON.stringify(body) : undefined,
       });
     },
+    codes,
     gateway,
     summarizer,
     answerer,
     summarize: () => processSummaryJobs(pool, summarizer, config),
     deliver: () => deliverSummaries(pool, gateway),
     async reset() {
+      codes.length = 0;
       gateway.sends = [];
       gateway.recipientSends = [];
       summarizer.canned = {};
