@@ -2,7 +2,7 @@ import type pg from "pg";
 import type { Config } from "./config.ts";
 import { decrypt } from "./crypto.ts";
 import type { Language } from "./scheduler.ts";
-import { PLANS, creditsToday, getPlan } from "./billing.ts";
+import { processingBlock } from "./block.ts";
 
 // SummarizerPort — the AI boundary (spec: batch + config in, structured JSON
 // out). The port receives plain data and returns plain data; it holds no tool
@@ -130,6 +130,9 @@ export async function processSummaryJobs(
   config: Config,
 ): Promise<number> {
   let processed = 0;
+  // Jobs whose account is blocked this tick: left pending and not re-selected,
+  // so a block can't spin the drain.
+  const blocked: string[] = [];
   for (;;) {
     const client = await pool.connect();
     let jobId: string | null = null;
@@ -140,11 +143,11 @@ export async function processSummaryJobs(
          FROM summary_jobs j
          JOIN groups g ON g.id = j.group_id
          JOIN whatsapp_sessions s ON s.id = g.session_id
-         JOIN users u ON u.id = s.user_id
-         WHERE j.status = 'pending' AND NOT u.paused
+         WHERE j.status = 'pending' AND NOT (j.id = ANY($1::bigint[]))
          ORDER BY j.id
          FOR UPDATE OF j SKIP LOCKED
          LIMIT 1`,
+        [blocked],
       );
       if (rows.length === 0) {
         await client.query("COMMIT");
@@ -152,6 +155,24 @@ export async function processSummaryJobs(
       }
       const job = rows[0];
       jobId = job.id;
+
+      // Processing Block (ticket 17). The credit cap parks the job as 'capped'
+      // — its window is stale by the next billing day, so retrying it would
+      // summarise a window the user has already lived through. Every other
+      // reason leaves the job pending for a later tick.
+      const block = await processingBlock(client, job.user_id, {
+        groupId: job.group_id,
+        stage: "summarize",
+      });
+      if (block) {
+        if (block.reason === "over_daily_credits") {
+          await client.query(`UPDATE summary_jobs SET status = 'capped' WHERE id = $1`, [job.id]);
+        } else {
+          blocked.push(job.id);
+        }
+        await client.query("COMMIT");
+        continue;
+      }
 
       const msgs = await client.query(
         `SELECT id, sender_ref, sent_at, body_ciphertext FROM messages
@@ -174,19 +195,6 @@ export async function processSummaryJobs(
       let inputTokens = 0;
       let outputTokens = 0;
       let durationMs = 0;
-      // Plan cap on AI usage per UTC day (spec §53): credits = AI-generated
-      // summaries. Empty batches cost nothing and pass through; a capped job is
-      // parked as 'capped' (its window is stale by the next billing day, so it
-      // is not retried) and stays visible via job status and /v1/usage.
-      if (batch.length > 0) {
-        const plan = await getPlan(client, job.user_id);
-        if ((await creditsToday(client, job.user_id)) >= PLANS[plan].max_summaries_per_day) {
-          await client.query(`UPDATE summary_jobs SET status = 'capped' WHERE id = $1`, [job.id]);
-          await client.query("COMMIT");
-          continue;
-        }
-      }
-
       if (batch.length > 0) {
         const t0 = Date.now();
         const res = await summarizer.summarize({ language: job.language, messages: batch });

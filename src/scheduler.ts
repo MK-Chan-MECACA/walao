@@ -1,4 +1,5 @@
 import type pg from "pg";
+import { processingBlock } from "./block.ts";
 
 export const LANGUAGES = ["zh", "en", "ms"] as const;
 export type Language = (typeof LANGUAGES)[number];
@@ -99,16 +100,19 @@ export type SummaryJob = {
 // are re-checked at fire time, so disabling also silences an existing schedule.
 export async function tickScheduler(pool: pg.Pool, now: Date = new Date()): Promise<SummaryJob[]> {
   const { rows } = await pool.query(
-    `SELECT s.group_id, s.local_time, s.timezone, s.language, s.last_fired_at
+    `SELECT s.group_id, s.local_time, s.timezone, s.language, s.last_fired_at, ws.user_id
      FROM summary_schedules s
      JOIN groups g ON g.id = s.group_id
      JOIN whatsapp_sessions ws ON ws.id = g.session_id
-     JOIN users u ON u.id = ws.user_id
-     WHERE g.enabled AND NOT u.paused`,
+     WHERE g.enabled`,
   );
 
   const jobs: SummaryJob[] = [];
   for (const r of rows) {
+    // Processing Block (ticket 17): checked before last_fired_at moves, so a
+    // block postpones the window rather than consuming it.
+    if (await processingBlock(pool, r.user_id, { groupId: r.group_id, stage: "schedule" }))
+      continue;
     const { date, time } = localParts(now, r.timezone);
     if (time < r.local_time) continue;
     if (r.last_fired_at && localParts(new Date(r.last_fired_at), r.timezone).date === date) {

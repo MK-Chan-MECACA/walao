@@ -40,6 +40,7 @@ import {
 import { askQuestion, type AnswererPort } from "./ask.ts";
 import { enableTier1, sendOutbound } from "./tier1.ts";
 import { isHalted, setHalted } from "./halt.ts";
+import { getStatus } from "./block.ts";
 import { recordReview, reviewQueue } from "./quality.ts";
 import { getUsage } from "./billing.ts";
 import { hashToken } from "./crypto.ts";
@@ -396,6 +397,12 @@ export function createApp(deps: {
 
       if (req.method === "GET" && url.pathname === "/v1/groups") {
         send(res, 200, { groups: await listGroups(pool, userId) });
+        return;
+      }
+
+      // The single "is WALAO processing right now?" answer (ticket 17, spec §216).
+      if (req.method === "GET" && url.pathname === "/v1/status") {
+        send(res, 200, await getStatus(pool, userId));
         return;
       }
 

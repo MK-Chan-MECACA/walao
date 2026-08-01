@@ -3,6 +3,7 @@ import type { GatewayPort } from "./gateway/port.ts";
 import type { Config } from "./config.ts";
 import { verifyHmac } from "./crypto.ts";
 import { applyGatewayStatus } from "./connections.ts";
+import { openGap, processingBlock } from "./block.ts";
 import { handleRecipientReply } from "./tier1.ts";
 
 export type IngestResult =
@@ -57,28 +58,24 @@ export async function ingestWebhook(
   // payload is never persisted anywhere. All drops still answer 202 so the
   // response doesn't leak which groups a user subscribes to.
   const sub = await pool.query(
-    `SELECT s.id AS session_id, s.status AS session_status, u.id AS user_id, u.paused, g.id AS group_id, g.enabled
+    `SELECT s.id AS session_id, s.user_id, g.id AS group_id, g.enabled
      FROM whatsapp_sessions s
-     JOIN users u ON u.id = s.user_id
      LEFT JOIN groups g ON g.session_id = s.id AND g.external_jid = $2
      WHERE s.external_session_id = $1`,
     [evt.sessionExternalId, evt.groupJid],
   );
   if (sub.rows.length === 0) return { status: 202 }; // unknown session: unattributable, drop
-  const {
-    session_id: sessionId,
-    session_status: sessionStatus,
-    user_id: userId,
-    paused,
-    group_id: groupId,
-    enabled,
-  } = sub.rows[0];
-  // Disconnect boundary (ticket 3): a non-connected session ingests nothing —
-  // not even group discovery. Silent 202 like the consent drops.
-  if (sessionStatus !== "connected") return { status: 202 };
-  // Pause boundary (ticket 10): a paused user ingests nothing either — the
-  // event is dropped before any write, group discovery included.
-  if (paused) return { status: 202 };
+  const { session_id: sessionId, user_id: userId, group_id: groupId, enabled } = sub.rows[0];
+  // Processing Block (ticket 17): halted, unpaid, paused, unpaired,
+  // disconnected or over a plan cap — one question, one answer, and nothing is
+  // written when the answer is yes, group discovery included. Silent 202 like
+  // the consent drops so the response leaks nothing. Over the daily message cap
+  // the drop opens a coverage gap, so summaries spanning it say they're partial.
+  const block = await processingBlock(pool, userId, { groupId, stage: "ingest" });
+  if (block) {
+    if (block.reason === "over_daily_messages") await openGap(pool, sessionId, "plan_limit");
+    return { status: 202 };
+  }
   // Tier 1 handshake (ticket 13): a DM from an outbound recipient is consumed
   // here — "Yes" flips the handshake to confirmed, anything else leaves it
   // pending. Recipient DMs are never stored and never registered as groups.

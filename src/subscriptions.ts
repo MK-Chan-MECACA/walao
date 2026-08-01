@@ -90,7 +90,11 @@ async function setEnabled(
     // The join to the user's sessions is the tenant boundary: another user's
     // group id behaves exactly like a nonexistent one.
     const res = await client.query(
-      `UPDATE groups g SET enabled = $3
+      // enabled_at is the tiebreak when an account goes over the group cap: the
+      // N enabled longest keep processing (spec §240). Re-attesting an already
+      // enabled group keeps its original moment.
+      `UPDATE groups g SET enabled = $3,
+              enabled_at = CASE WHEN $3 THEN COALESCE(g.enabled_at, now()) ELSE NULL END
        FROM whatsapp_sessions s
        WHERE g.id = $2 AND g.session_id = s.id AND s.user_id = $1
        RETURNING g.id`,

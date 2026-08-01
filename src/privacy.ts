@@ -32,8 +32,27 @@ async function audit(
 // disconnect — privacy-first: paused means not stored). Pending summary jobs
 // and undelivered summaries merely wait: scheduler/summarizer/delivery skip
 // paused users and resume where they left off.
+// A pause is lost coverage (spec §31): it opens a coverage gap so that summaries
+// spanning it are flagged incomplete, exactly like halt and disconnect. Resume
+// closes the gaps the pause opened and nobody else's.
 export async function setPaused(pool: pg.Pool, userId: string, paused: boolean): Promise<void> {
   await pool.query(`UPDATE users SET paused = $2 WHERE id = $1`, [userId, paused]);
+  if (paused) {
+    await pool.query(
+      `INSERT INTO coverage_gaps (session_id, reason)
+       SELECT s.id, 'paused' FROM whatsapp_sessions s
+       WHERE s.user_id = $1 AND NOT EXISTS
+         (SELECT 1 FROM coverage_gaps WHERE session_id = s.id AND ended_at IS NULL)`,
+      [userId],
+    );
+  } else {
+    await pool.query(
+      `UPDATE coverage_gaps SET ended_at = now()
+       WHERE reason = 'paused' AND ended_at IS NULL
+         AND session_id IN (SELECT id FROM whatsapp_sessions WHERE user_id = $1)`,
+      [userId],
+    );
+  }
   await audit(pool, userId, paused ? "pause" : "resume");
 }
 

@@ -1,6 +1,6 @@
 import type pg from "pg";
 import type { GatewayPort } from "./gateway/port.ts";
-import { isHalted } from "./halt.ts";
+import { processingBlock, type BlockReason } from "./block.ts";
 
 // Tier 1 (spec §47–48): opt-in outbound to others. Tier 0 stays the default —
 // nothing here runs unless the user explicitly authorized outbound and accepted
@@ -30,10 +30,8 @@ export async function enableTier1(
 export type OutboundResult =
   | "invalid"
   | "tier1_required"
-  | "paused"
-  | "not_connected"
   | "handshake_pending"
-  | "halted"
+  | BlockReason
   | { sent: true; handshake: "pending" | "confirmed" };
 
 export async function sendOutbound(
@@ -45,12 +43,12 @@ export async function sendOutbound(
 ): Promise<OutboundResult> {
   if (typeof recipient !== "string" || recipient.length === 0) return "invalid";
   if (typeof text !== "string" || text.length === 0) return "invalid";
-  if (await isHalted(pool)) return "halted"; // ticket 14: no outbound while halted
+  // Processing Block (ticket 17): outbound is a pipeline stage too — halted,
+  // paused, disconnected and the rest stop it, and the caller gets the reason.
+  const block = await processingBlock(pool, userId, { stage: "outbound" });
+  if (block) return block.reason;
 
-  const user = await pool.query(`SELECT paused, tier1_enabled_at FROM users WHERE id = $1`, [
-    userId,
-  ]);
-  if (user.rows[0].paused) return "paused";
+  const user = await pool.query(`SELECT tier1_enabled_at FROM users WHERE id = $1`, [userId]);
   if (!user.rows[0].tier1_enabled_at) return "tier1_required";
 
   const sess = await pool.query(
@@ -58,7 +56,7 @@ export async function sendOutbound(
      WHERE user_id = $1 AND status = 'connected' LIMIT 1`,
     [userId],
   );
-  if (sess.rows.length === 0) return "not_connected";
+  if (sess.rows.length === 0) return "disconnected"; // lost between the check and here
   const sessionExternalId = sess.rows[0].external_session_id as string;
 
   // First-ever message to this number: claim the handshake row, then send the

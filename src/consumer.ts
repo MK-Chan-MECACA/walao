@@ -2,7 +2,7 @@ import type pg from "pg";
 import type { GatewayPort } from "./gateway/port.ts";
 import type { Config } from "./config.ts";
 import { encrypt } from "./crypto.ts";
-import { PLANS, countMessagesToday, getPlan } from "./billing.ts";
+import { closeGap, openGap, processingBlock } from "./block.ts";
 
 // Drain the durable queue: pick pending events (locked so concurrent/​restarted
 // consumers don't double-process), normalize via the gateway port, encrypt the
@@ -66,16 +66,11 @@ async function processEvent(
 
   // Resolve session -> owning user (tenant). Unknown session => skip: we can't
   // attribute the message to a tenant, and unattributed data must not be stored.
-  // Status and pause guards mirror the ingress ones: "disconnect/pause stops
-  // processing immediately" means events queued before the change skip too.
   const session = await client.query(
-    `SELECT s.id, s.user_id, s.status, u.paused
-     FROM whatsapp_sessions s JOIN users u ON u.id = s.user_id
-     WHERE s.external_session_id = $1`,
+    `SELECT id, user_id FROM whatsapp_sessions WHERE external_session_id = $1`,
     [evt.sessionExternalId],
   );
-  if (session.rows.length === 0 || session.rows[0].status !== "connected") return false;
-  if (session.rows[0].paused) return false;
+  if (session.rows.length === 0) return false;
   const { id: sessionId, user_id: userId } = session.rows[0];
 
   // Store-time consent guard: ingress already drops disabled groups, but an
@@ -88,25 +83,17 @@ async function processEvent(
   if (group.rows.length === 0 || !group.rows[0].enabled) return false;
   const groupId = group.rows[0].id;
 
-  // Plan cap on stored message volume per UTC day (spec §53). Beyond the cap
-  // the event is skipped and a coverage gap opens, so any brief overlapping the
-  // capped window is flagged incomplete — never silently truncated. The first
-  // under-cap store closes the gap.
-  const plan = await getPlan(client, userId);
-  if ((await countMessagesToday(client, userId)) >= PLANS[plan].max_messages_per_day) {
-    await client.query(
-      `INSERT INTO coverage_gaps (session_id, reason)
-       SELECT $1, 'plan_limit' WHERE NOT EXISTS
-         (SELECT 1 FROM coverage_gaps WHERE session_id = $1 AND ended_at IS NULL)`,
-      [sessionId],
-    );
+  // Processing Block (ticket 17): the store-time mirror of the ingress check —
+  // "a block stops processing immediately" means events queued before the block
+  // opened are skipped here too. Over the daily message cap a coverage gap
+  // opens, so any brief overlapping the capped window is flagged incomplete
+  // rather than silently truncated; the first under-cap store closes it.
+  const block = await processingBlock(client, userId, { groupId, stage: "ingest" });
+  if (block) {
+    if (block.reason === "over_daily_messages") await openGap(client, sessionId, "plan_limit");
     return false;
   }
-  await client.query(
-    `UPDATE coverage_gaps SET ended_at = now()
-     WHERE session_id = $1 AND reason = 'plan_limit' AND ended_at IS NULL`,
-    [sessionId],
-  );
+  await closeGap(client, sessionId, "plan_limit");
 
   const ciphertext = encrypt(evt.text, config.encKey);
 
