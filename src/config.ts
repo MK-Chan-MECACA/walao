@@ -1,3 +1,5 @@
+import { DEFAULT_MODEL } from "./summarizer/anthropic.ts";
+
 // Env config. Kept dumb on purpose — read once, fail loud if a required secret
 // is missing (input validation at a trust boundary).
 
@@ -10,6 +12,8 @@ export type Config = {
   port: number;
   waapiBaseUrl: string;
   waapiApiKey: string; // empty until a gateway is provisioned; adapter fails loud on use
+  anthropicApiKey: string; // empty => LocalSummarizer echo stand-in, no AI calls
+  summarizerModel: string;
 };
 
 function required(name: string): string {
@@ -34,5 +38,9 @@ export function loadConfig(): Config {
     // fine without a gateway — the adapter throws when actually asked to talk.
     waapiBaseUrl: (process.env.WAAPI_BASE_URL ?? "http://localhost:8080").replace(/\/+$/, ""),
     waapiApiKey: process.env.WAAPI_API_KEY ?? "",
+    // Also not required(): without a key the server boots on the local echo
+    // summarizer, so the pipeline stays runnable with no AI spend.
+    anthropicApiKey: process.env.ANTHROPIC_API_KEY ?? "",
+    summarizerModel: process.env.WALAO_SUMMARIZER_MODEL ?? DEFAULT_MODEL,
   };
 }

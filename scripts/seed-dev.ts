@@ -23,7 +23,10 @@ const session = await pool.query(
    VALUES ($1, $2, 'connected')
    ON CONFLICT (external_session_id) DO UPDATE SET status = 'connected'
    RETURNING id, external_session_id`,
-  [userId, `dev-session-${userId.slice(0, 8)}`],
+  // Must equal the gateway's session name: ingest resolves a webhook event by
+  // whatsapp_sessions.external_session_id, so a mismatch silently drops every
+  // real message. The gateway's dev session is "walao".
+  [userId, process.env.WALAO_DEV_SESSION ?? "walao"],
 );
 const sessionId = session.rows[0].id;
 

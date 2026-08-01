@@ -9,6 +9,7 @@ import { deliverSummaries } from "./deliver.ts";
 import { processSummaryJobs } from "./summarize.ts";
 import { backfillGroupNames } from "./subscriptions.ts";
 import { LocalSummarizer } from "./summarizer/local.ts";
+import { AnthropicSummarizer } from "./summarizer/anthropic.ts";
 import type { AnswererPort } from "./ask.ts";
 
 // Real entrypoint. Boots the schema, serves the webhook + API, and drains the
@@ -21,9 +22,16 @@ async function main(): Promise<void> {
   await migrate(pool);
 
   const gateway = new WaapiGateway(config.waapiBaseUrl, config.waapiApiKey);
-  // ponytail: deterministic local stand-in; swap for a real model client when
-  // one is provisioned (same port, this line only).
-  const summarizer = new LocalSummarizer();
+  // Real model when a key is present, deterministic echo when it isn't, so the
+  // pipeline stays runnable locally without AI spend. Same port either way.
+  const summarizer = config.anthropicApiKey
+    ? new AnthropicSummarizer(config.anthropicApiKey, config.summarizerModel)
+    : new LocalSummarizer();
+  console.log(
+    config.anthropicApiKey
+      ? `summarizer: ${config.summarizerModel}`
+      : "summarizer: local echo (no ANTHROPIC_API_KEY — briefs will be verbatim, not condensed)",
+  );
   // ponytail: real model client wired when one is provisioned; FakeAnswerer
   // covers ticket 11 (same status as WAAPI pairing/sendToSelf).
   const answerer: AnswererPort = {

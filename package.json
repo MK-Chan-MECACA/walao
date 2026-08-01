@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "description": "WALAO — personal AI information layer for WhatsApp (ticket 1: ingestion walking skeleton)",
-  "engines": { "node": ">=24" },
+  "engines": {
+    "node": ">=24"
+  },
   "scripts": {
     "start": "node src/server.ts",
     "dev": "node --env-file=.env --watch src/server.ts",
@@ -13,6 +15,7 @@
     "test": "node --test --test-concurrency=1"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.115.0",
     "pg": "^8.13.1"
   },
   "devDependencies": {

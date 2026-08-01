@@ -31,6 +31,9 @@ export function testConfig(): Config {
     // Unused: every test drives the FakeGateway, never a real WAAPI instance.
     waapiBaseUrl: "http://127.0.0.1:1",
     waapiApiKey: "",
+    // Unused: every test drives FakeSummarizer, never a real model.
+    anthropicApiKey: "",
+    summarizerModel: "test-model",
   };
 }
 
