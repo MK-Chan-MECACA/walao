@@ -42,7 +42,7 @@ import { enableTier1, sendOutbound } from "./tier1.ts";
 import { isHalted, setHalted } from "./halt.ts";
 import { getStatus } from "./block.ts";
 import { recordReview, reviewQueue } from "./quality.ts";
-import { getUsage } from "./billing.ts";
+import { cancelPlan, getUsage } from "./billing.ts";
 import { login, signup, verify, type SendCode } from "./accounts.ts";
 import { hashToken } from "./crypto.ts";
 import { timingSafeEqual } from "node:crypto";
@@ -462,6 +462,13 @@ export function createApp(deps: {
       // The single "is WALAO processing right now?" answer (ticket 17, spec §216).
       if (req.method === "GET" && url.pathname === "/v1/status") {
         send(res, 200, await getStatus(pool, userId));
+        return;
+      }
+
+      // Cancellation (spec §100-101, §239): back to Free, nothing deleted.
+      if (req.method === "POST" && url.pathname === "/v1/plan/cancel") {
+        await cancelPlan(pool, userId);
+        send(res, 200, { plan: "free" });
         return;
       }
 

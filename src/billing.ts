@@ -46,6 +46,16 @@ export async function grantTrial(db: Db, userId: string, numberSha256: string): 
   );
 }
 
+// Cancellation (spec §100-103, §239): returning to Free, never a deletion event.
+// Summaries, Memories and Reminders are untouched and enabled Groups stay
+// enabled — the ones past Free's cap carry an over_group_cap Processing Block
+// (block.ts) until the Account disables enough or upgrades again, so upgrading
+// restores exactly what it had. An active Trial still outranks this: the Trial
+// is granted per number, not bought, so cancelling a subscription does not end it.
+export async function cancelPlan(db: Db, userId: string): Promise<void> {
+  await db.query(`UPDATE users SET plan = 'free' WHERE id = $1`, [userId]);
+}
+
 // "Today" is the UTC day throughout.
 // ponytail: user-local billing day needs a per-user timezone setting; UTC until someone asks.
 export async function countMessagesToday(db: Db, userId: string): Promise<number> {
