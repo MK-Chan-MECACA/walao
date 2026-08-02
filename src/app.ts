@@ -9,9 +9,9 @@ import {
   DISCLOSURE_TEMPLATE,
   disableGroup,
   enableGroup,
-  listConsentRecords,
   listGroups,
 } from "./subscriptions.ts";
+import { DATA_PROCESSING_TERMS, listAttestations } from "./attestations.ts";
 import {
   ONBOARDING_DISCLOSURE,
   createConnection,
@@ -150,8 +150,15 @@ export function createApp(deps: {
       return;
     }
 
+    // The terms are readable before an Account exists — signing up echoes this
+    // version, so the wording has to be reachable without a credential (§6).
+    if (req.method === "GET" && url.pathname === "/v1/terms") {
+      send(res, 200, DATA_PROCESSING_TERMS);
+      return;
+    }
+
     // Account identity (ticket 18). These three are the only unauthenticated
-    // /v1 routes — they are how a caller gets a credential in the first place.
+    // /v1 write routes — they are how a caller gets a credential in the first place.
     if (
       req.method === "POST" &&
       (url.pathname === "/v1/signup" ||
@@ -175,9 +182,16 @@ export function createApp(deps: {
         return;
       }
 
-      const issue = url.pathname === "/v1/signup" ? signup : login;
-      if ((await issue(pool, sendCode, b.email)) === "invalid") {
+      const result =
+        url.pathname === "/v1/signup"
+          ? await signup(pool, sendCode, b.email, b.terms_version)
+          : await login(pool, sendCode, b.email);
+      if (result === "invalid") {
         send(res, 400, { error: "invalid_email" });
+        return;
+      }
+      if (result === "terms_required") {
+        send(res, 400, { error: "terms_required" });
         return;
       }
       // Always 202, known address or not: the answer must not reveal whether
@@ -456,8 +470,8 @@ export function createApp(deps: {
         return;
       }
 
-      if (req.method === "GET" && url.pathname === "/v1/consent-records") {
-        send(res, 200, { records: await listConsentRecords(pool, userId) });
+      if (req.method === "GET" && url.pathname === "/v1/attestations") {
+        send(res, 200, { attestations: await listAttestations(pool, userId) });
         return;
       }
 

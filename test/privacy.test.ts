@@ -31,7 +31,7 @@ async function groupTraces(groupId: string, marker: string): Promise<number> {
     `SELECT 1 FROM summaries WHERE group_id = $1`,
     `SELECT 1 FROM summary_jobs WHERE group_id = $1`,
     `SELECT 1 FROM summary_schedules WHERE group_id = $1`,
-    `SELECT 1 FROM consent_records WHERE group_id = $1`,
+    `SELECT 1 FROM attestations WHERE group_id = $1`,
   ]) {
     n += await count(sql, [groupId]);
   }
@@ -220,7 +220,7 @@ describe("privacy controls", () => {
       `SELECT 1 FROM summaries WHERE user_id = $1`,
       `SELECT 1 FROM reminders WHERE user_id = $1`,
       `SELECT 1 FROM item_states WHERE user_id = $1`,
-      `SELECT 1 FROM consent_records WHERE user_id = $1`,
+      `SELECT 1 FROM attestations WHERE user_id = $1`,
     ]) {
       assert.equal(await count(sql, [userId]), 0, sql);
     }

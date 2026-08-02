@@ -7,6 +7,7 @@ import {
   makeHarness,
   type Harness,
 } from "./helpers.ts";
+import { ONBOARDING_DISCLOSURE } from "../src/connections.ts";
 
 // Ticket 14 (spec §49): product-wide gateway halt switch. Whole-system seam:
 // real ingress + API + delivery drain, sends captured by the fake gateway.
@@ -77,7 +78,9 @@ test("halt stops all gateway activity: webhooks refused, sends and pairing block
   assert.equal(h.gateway.recipientSends.length, 0);
 
   // Pairing is gateway activity too.
-  const pair = await h.api("op1", "POST", "/v1/connections", { disclosure_version: "2026-07-30" });
+  const pair = await h.api("op1", "POST", "/v1/connections", {
+    disclosure_version: ONBOARDING_DISCLOSURE.version,
+  });
   assert.equal(pair.status, 503);
 
   // Halt state is visible on the connection-health surface.

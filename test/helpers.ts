@@ -336,7 +336,7 @@ export async function makeHarness(): Promise<Harness> {
       answerer.canned = {};
       answerer.calls = [];
       await pool.query(
-        `TRUNCATE messages, summaries, summary_jobs, summary_schedules, consent_records, coverage_gaps, groups, whatsapp_sessions, users, ingest_events, privacy_audit, quality_reviews RESTART IDENTITY CASCADE`,
+        `TRUNCATE messages, summaries, summary_jobs, summary_schedules, attestations, coverage_gaps, groups, whatsapp_sessions, users, ingest_events, privacy_audit, quality_reviews RESTART IDENTITY CASCADE`,
       );
       // system_halt is a singleton row, not per-test data — un-halt, don't truncate.
       await pool.query(`UPDATE system_halt SET halted = false`);

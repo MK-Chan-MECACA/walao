@@ -1,6 +1,7 @@
 import { after, before, beforeEach, test } from "node:test";
 import assert from "node:assert/strict";
 import { makeHarness, type Harness } from "./helpers.ts";
+import { DATA_PROCESSING_TERMS as TERMS } from "../src/attestations.ts";
 
 // Ticket 18 (spec §1-3, §199-203): Account identity by verified email.
 // Whole-system seam — real HTTP, real Postgres, the mail seam captured in
@@ -22,7 +23,10 @@ const post = (path: string, body: unknown) => h.api("", "POST", path, body);
 const lastCode = () => h.codes[h.codes.length - 1].code;
 
 test("signup mails a code; verifying it issues a working credential", async () => {
-  const signup = await post("/v1/signup", { email: "merchant@example.com" });
+  const signup = await post("/v1/signup", {
+    email: "merchant@example.com",
+    terms_version: TERMS.version,
+  });
   assert.equal(signup.status, 202);
   assert.equal(h.codes.length, 1);
   assert.equal(h.codes[0].email, "merchant@example.com");
@@ -47,7 +51,7 @@ test("signup mails a code; verifying it issues a working credential", async () =
 });
 
 test("login rotates the credential; the previous token stops working", async () => {
-  await post("/v1/signup", { email: "a@example.com" });
+  await post("/v1/signup", { email: "a@example.com", terms_version: TERMS.version });
   const first = (await post("/v1/verify", { email: "a@example.com", code: lastCode() }))
     .body as { token: string };
 
@@ -71,7 +75,7 @@ test("an unknown address is not revealed and creates nothing", async () => {
 });
 
 test("a wrong or expired code issues nothing", async () => {
-  await post("/v1/signup", { email: "b@example.com" });
+  await post("/v1/signup", { email: "b@example.com", terms_version: TERMS.version });
 
   const wrong = await post("/v1/verify", { email: "b@example.com", code: "ZZZZZZZZ" });
   assert.equal(wrong.status, 400);
@@ -89,8 +93,8 @@ test("a wrong or expired code issues nothing", async () => {
 });
 
 test("addresses are one Account regardless of case or padding", async () => {
-  await post("/v1/signup", { email: "  Merchant@Example.COM " });
-  await post("/v1/signup", { email: "merchant@example.com" });
+  await post("/v1/signup", { email: "  Merchant@Example.COM ", terms_version: TERMS.version });
+  await post("/v1/signup", { email: "merchant@example.com", terms_version: TERMS.version });
 
   const { rows } = await h.pool.query(`SELECT email FROM users`);
   assert.deepEqual(rows, [{ email: "merchant@example.com" }]);
@@ -102,7 +106,7 @@ test("addresses are one Account regardless of case or padding", async () => {
 
 test("a malformed address is rejected before any row is written", async () => {
   for (const email of ["not-an-email", "", "  ", null, 42, `${"x".repeat(250)}@example.com`]) {
-    const res = await post("/v1/signup", { email });
+    const res = await post("/v1/signup", { email, terms_version: TERMS.version });
     assert.equal(res.status, 400, `expected 400 for ${JSON.stringify(email)}`);
     assert.deepEqual(res.body, { error: "invalid_email" });
   }

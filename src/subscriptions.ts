@@ -1,5 +1,6 @@
 import type pg from "pg";
 import { PLANS } from "./billing.ts";
+import { recordAttestation } from "./attestations.ts";
 import type { GatewayPort } from "./gateway/port.ts";
 
 // Bump when the attestation wording shown to the user changes. Enabling
@@ -104,10 +105,12 @@ async function setEnabled(
       await client.query("ROLLBACK");
       return "not_found";
     }
-    await client.query(
-      `INSERT INTO consent_records (user_id, group_id, action, attestation_version)
-       VALUES ($1, $2, $3, $4)`,
-      [userId, groupId, enabled ? "enabled" : "disabled", attestationVersion],
+    await recordAttestation(
+      client,
+      userId,
+      enabled ? "group_responsibility" : "group_disabled",
+      attestationVersion,
+      groupId,
     );
     await client.query("COMMIT");
     return "ok";
@@ -117,28 +120,6 @@ async function setEnabled(
   } finally {
     client.release();
   }
-}
-
-export type ConsentRecord = {
-  id: string;
-  group_id: string;
-  action: string;
-  attestation_version: string | null;
-  created_at: string;
-};
-
-export async function listConsentRecords(
-  pool: pg.Pool,
-  userId: string,
-): Promise<ConsentRecord[]> {
-  const { rows } = await pool.query(
-    `SELECT id, group_id, action, attestation_version, created_at
-     FROM consent_records
-     WHERE user_id = $1
-     ORDER BY created_at, id`,
-    [userId],
-  );
-  return rows.map((r) => ({ ...r, created_at: new Date(r.created_at).toISOString() }));
 }
 
 // Backfill group titles. Discovery registers a group the first time a message

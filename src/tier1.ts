@@ -1,6 +1,7 @@
 import type pg from "pg";
 import type { GatewayPort } from "./gateway/port.ts";
 import { processingBlock, type BlockReason } from "./block.ts";
+import { recordAttestation } from "./attestations.ts";
 
 // Tier 1 (spec §47–48): opt-in outbound to others. Tier 0 stays the default —
 // nothing here runs unless the user explicitly authorized outbound and accepted
@@ -18,11 +19,12 @@ export async function enableTier1(
 ): Promise<"authorization_required" | { tier1_enabled: true }> {
   if (typeof authorizationVersion !== "string" || authorizationVersion.length === 0)
     return "authorization_required";
+  // Ticket 19: the authorisation is an Attestation row; tier1_enabled_at stays
+  // as the fast lookup the outbound path reads.
+  await recordAttestation(pool, userId, "tier1_outbound", authorizationVersion);
   await pool.query(
-    `UPDATE users SET tier1_authorization_version = $2,
-                      tier1_enabled_at = COALESCE(tier1_enabled_at, now())
-     WHERE id = $1`,
-    [userId, authorizationVersion],
+    `UPDATE users SET tier1_enabled_at = COALESCE(tier1_enabled_at, now()) WHERE id = $1`,
+    [userId],
   );
   return { tier1_enabled: true };
 }

@@ -1,6 +1,7 @@
 import { randomInt, randomBytes, timingSafeEqual } from "node:crypto";
 import type pg from "pg";
 import { hashToken } from "./crypto.ts";
+import { DATA_PROCESSING_TERMS, recordAttestation } from "./attestations.ts";
 
 // Ticket 18 (spec §1-3, §199-203): an Account is an email address that proved
 // it can receive mail. No password — the mail round trip is the factor.
@@ -34,14 +35,24 @@ export async function signup(
   pool: pg.Pool,
   send: SendCode,
   rawEmail: unknown,
-): Promise<"invalid" | "ok"> {
+  termsVersion?: unknown,
+): Promise<"invalid" | "terms_required" | "ok"> {
   const email = normalizeEmail(rawEmail);
   if (!email) return "invalid";
+  // Ticket 19 (spec §6): signing up affirms the data-processing terms, and the
+  // version echoed here is the version stored — proof the wording was shown.
+  if (termsVersion !== DATA_PROCESSING_TERMS.version) return "terms_required";
   const { rows } = await pool.query(
     `INSERT INTO users (email) VALUES ($1)
      ON CONFLICT (email) DO UPDATE SET email = EXCLUDED.email
      RETURNING id`,
     [email],
+  );
+  await recordAttestation(
+    pool,
+    rows[0].id,
+    "data_processing_terms",
+    DATA_PROCESSING_TERMS.version,
   );
   await issueCode(pool, send, rows[0].id, email);
   return "ok";

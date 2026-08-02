@@ -70,12 +70,12 @@ test("enabling records a consent attestation (version + timestamp) and lets mess
   assert.equal((await groups(token))[0].enabled, true);
 
   // Audit trail is queryable.
-  const audit = await h.api(token, "GET", "/v1/consent-records");
-  const records = (audit.body as { records: Array<Record<string, unknown>> }).records;
+  const audit = await h.api(token, "GET", "/v1/attestations");
+  const records = (audit.body as { attestations: Array<Record<string, unknown>> }).attestations;
   assert.equal(records.length, 1);
   assert.equal(records[0].group_id, groupId);
-  assert.equal(records[0].action, "enabled");
-  assert.equal(records[0].attestation_version, ATTESTATION_VERSION);
+  assert.equal(records[0].kind, "group_responsibility");
+  assert.equal(records[0].version, ATTESTATION_VERSION);
   assert.ok(!Number.isNaN(Date.parse(records[0].created_at as string)));
 
   // Messages now flow end to end.
@@ -105,9 +105,9 @@ test("disabling immediately stops storage — including events already queued", 
   assert.equal((await h.getMessages(token)).messages.length, 1);
 
   // Disable is audited too.
-  const audit = await h.api(token, "GET", "/v1/consent-records");
-  const records = (audit.body as { records: Array<{ action: string }> }).records;
-  assert.deepEqual(records.map((r) => r.action), ["disabled"]);
+  const audit = await h.api(token, "GET", "/v1/attestations");
+  const records = (audit.body as { attestations: Array<{ kind: string }> }).attestations;
+  assert.deepEqual(records.map((r) => r.kind), ["group_disabled"]);
 });
 
 test("a user cannot enable another user's group", async () => {
