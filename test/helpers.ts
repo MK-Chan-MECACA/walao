@@ -4,6 +4,7 @@ import type { AddressInfo } from "node:net";
 import { createPool, migrate, type Pool } from "../src/db.ts";
 import { createApp } from "../src/app.ts";
 import { signHmac, hashToken, encrypt } from "../src/crypto.ts";
+import { accountKey } from "../src/accounts.ts";
 import type { Config } from "../src/config.ts";
 import type { GatewayEvent, GatewayPort, SessionStatus } from "../src/gateway/port.ts";
 import {
@@ -279,6 +280,12 @@ export async function makeHarness(): Promise<Harness> {
     // summary tests, whose timelines sit outside the webhook freshness window
     // by design. Returns the message id so canned summaries can cite it.
     async seedMessage(groupId, externalId, sentAt, opts) {
+      const owner = await pool.query(
+        `SELECT s.user_id FROM groups g JOIN whatsapp_sessions s ON s.id = g.session_id
+         WHERE g.id = $1`,
+        [groupId],
+      );
+      const key = await accountKey(pool, config, owner.rows[0].user_id);
       const { rows } = await pool.query(
         `INSERT INTO messages
            (user_id, session_id, group_id, external_id, sent_at, from_me, body_ciphertext, expires_at)
@@ -286,7 +293,7 @@ export async function makeHarness(): Promise<Harness> {
          FROM groups g JOIN whatsapp_sessions s ON s.id = g.session_id
          WHERE g.id = $1
          RETURNING id`,
-        [groupId, externalId, sentAt, encrypt(opts?.text ?? "seeded", config.encKey), opts?.fromMe ?? false],
+        [groupId, externalId, sentAt, encrypt(opts?.text ?? "seeded", key), opts?.fromMe ?? false],
       );
       return rows[0].id;
     },

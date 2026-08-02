@@ -1,6 +1,7 @@
 import type pg from "pg";
 import type { Config } from "./config.ts";
 import { decrypt } from "./crypto.ts";
+import { accountKey } from "./accounts.ts";
 import type { SummaryPayload } from "./summarize.ts";
 
 // AnswererPort — the Ask WALAO AI boundary, same shape as SummarizerPort:
@@ -88,11 +89,12 @@ async function retrieveSources(
     [userId],
   );
 
+  const key = await accountKey(pool, config, userId);
   const candidates: AskSource[] = [
     ...msgs.rows.map((m) => ({
       id: m.id as string,
       kind: "message" as const,
-      text: decrypt(m.body_ciphertext, config.encKey),
+      text: decrypt(m.body_ciphertext, key),
     })),
     ...sums.rows.map((s) => ({
       id: s.id as string,

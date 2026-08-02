@@ -1,6 +1,7 @@
 import type pg from "pg";
 import type { Config } from "./config.ts";
 import { decrypt } from "./crypto.ts";
+import { accountKey } from "./accounts.ts";
 import type { Language } from "./scheduler.ts";
 import { processingBlock } from "./block.ts";
 
@@ -180,12 +181,13 @@ export async function processSummaryJobs(
          ORDER BY sent_at`,
         [job.group_id, job.window_start, job.window_end],
       );
+      const key = await accountKey(client, config, job.user_id);
       const batch: BatchMessage[] = msgs.rows
         .map((m) => ({
           id: m.id as string,
           sender_ref: m.sender_ref as string | null,
           sent_at: (m.sent_at as Date).toISOString(),
-          text: decrypt(m.body_ciphertext, config.encKey).trim(),
+          text: decrypt(m.body_ciphertext, key).trim(),
         }))
         .filter((m) => m.text.length > 0);
 

@@ -1,6 +1,7 @@
 import type pg from "pg";
 import type { Config } from "./config.ts";
 import { decrypt, hashToken } from "./crypto.ts";
+import { accountKey } from "./accounts.ts";
 
 export type ApiMessage = {
   id: string;
@@ -34,12 +35,13 @@ export async function listMessages(
      ORDER BY sent_at`,
     [userId],
   );
+  const key = await accountKey(pool, config, userId);
   return rows.map((r) => ({
     id: r.id,
     group_id: r.group_id,
     external_id: r.external_id,
     sender_ref: r.sender_ref,
     sent_at: new Date(r.sent_at).toISOString(),
-    text: decrypt(r.body_ciphertext, config.encKey),
+    text: decrypt(r.body_ciphertext, key),
   }));
 }

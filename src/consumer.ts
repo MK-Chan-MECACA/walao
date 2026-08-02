@@ -2,6 +2,7 @@ import type pg from "pg";
 import type { GatewayPort } from "./gateway/port.ts";
 import type { Config } from "./config.ts";
 import { encrypt } from "./crypto.ts";
+import { accountKey } from "./accounts.ts";
 import { closeGap, openGap, processingBlock } from "./block.ts";
 
 // Drain the durable queue: pick pending events (locked so concurrent/​restarted
@@ -95,7 +96,7 @@ async function processEvent(
   }
   await closeGap(client, sessionId, "plan_limit");
 
-  const ciphertext = encrypt(evt.text, config.encKey);
+  const ciphertext = encrypt(evt.text, await accountKey(client, config, userId));
 
   // Idempotent store: a replayed event that slipped past the ingress dedup still
   // cannot create a second row. Expiry is stamped at store time from the owning

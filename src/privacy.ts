@@ -2,6 +2,7 @@ import type pg from "pg";
 import type { GatewayPort } from "./gateway/port.ts";
 import type { Config } from "./config.ts";
 import { listMessages } from "./api.ts";
+import { forgetAccountKey } from "./accounts.ts";
 
 // Ticket 10: pause, export, delete. Postgres is the system's only store — there
 // are no caches, search indexes, or managed backups — so "deleted everywhere"
@@ -175,6 +176,9 @@ export async function deleteAccount(pool: pg.Pool, userId: string): Promise<void
     await client.query(`DELETE FROM users WHERE id = $1`, [userId]);
     await audit(client, userId, "delete_account");
     await client.query("COMMIT");
+    // The wrapped key went with the row; drop the unwrapped copy this process
+    // is holding, or crypto-shredding would only start at the next restart.
+    forgetAccountKey(userId);
   } catch (err) {
     await client.query("ROLLBACK").catch(() => {});
     throw err;

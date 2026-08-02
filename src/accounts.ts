@@ -1,6 +1,7 @@
 import { randomInt, randomBytes, timingSafeEqual } from "node:crypto";
 import type pg from "pg";
-import { hashToken } from "./crypto.ts";
+import { decrypt, encrypt, hashToken } from "./crypto.ts";
+import type { Config } from "./config.ts";
 import { DATA_PROCESSING_TERMS, recordAttestation } from "./attestations.ts";
 
 // Ticket 18 (spec §1-3, §199-203): an Account is an email address that proved
@@ -111,4 +112,38 @@ export async function verify(
     [rows[0].id, hashToken(token)],
   );
   return { token, user_id: rows[0].id };
+}
+
+// Ticket 24 (spec §71-72, §220-227, ADR-0002): message bodies belong to one
+// Account's key, not to the master key, so deleting the Account makes its rows
+// undecryptable everywhere they still exist — including a backup nobody can
+// rewrite. The key is minted on first use rather than at signup: every path
+// that creates a users row (signup, operator, seeds) then gets one without
+// having to know this exists. COALESCE under the row lock makes the mint
+// race-safe — a concurrent minter waits, re-reads and keeps the stored key.
+const keyCache = new Map<string, Buffer>();
+
+export async function accountKey(
+  db: pg.Pool | pg.PoolClient,
+  config: Config,
+  userId: string,
+): Promise<Buffer> {
+  const cached = keyCache.get(userId);
+  if (cached) return cached;
+  const { rows } = await db.query(
+    `UPDATE users SET data_key_wrapped = COALESCE(data_key_wrapped, $2)
+     WHERE id = $1 RETURNING data_key_wrapped`,
+    [userId, encrypt(randomBytes(32).toString("base64"), config.encKey)],
+  );
+  if (!rows.length) throw new Error(`no such account: ${userId}`);
+  const key = Buffer.from(decrypt(rows[0].data_key_wrapped, config.encKey), "base64");
+  keyCache.set(userId, key);
+  return key;
+}
+
+// Crypto-shredding only holds if the process stops holding the key too.
+// ponytail: unbounded process-wide cache, one 32-byte key per active Account;
+// give it a TTL if a single process ever serves more Accounts than fit in RAM.
+export function forgetAccountKey(userId: string): void {
+  keyCache.delete(userId);
 }
