@@ -2,6 +2,9 @@ import { after, before, beforeEach, test } from "node:test";
 import assert from "node:assert/strict";
 import { buildEvent, countIngestEvents, makeHarness, type Harness } from "./helpers.ts";
 import { HANDSHAKE_SUFFIX } from "../src/tier1.ts";
+import { ATTESTATION_TEXTS } from "../src/attestations.ts";
+
+const TIER1_VERSION = ATTESTATION_TEXTS.tier1_outbound.version;
 
 // Ticket 13: Tier 1 opt-in outbound (spec §47) + recipient "Yes" handshake
 // (spec §48). Whole-system seam: real ingress + API, sends captured by the
@@ -24,7 +27,7 @@ const BUDDY = "buddy@s.whatsapp.net";
 async function seedTier1User(token: string): Promise<string> {
   const userId = await h.seedUser(token);
   await h.seedSession(userId, `sess-${token}`);
-  const res = await h.api(token, "POST", "/v1/tier1", { authorization_version: "tier1-v1" });
+  const res = await h.api(token, "POST", "/v1/tier1", { authorization_version: TIER1_VERSION });
   assert.equal(res.status, 200);
   return userId;
 }

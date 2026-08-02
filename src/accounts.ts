@@ -48,12 +48,7 @@ export async function signup(
      RETURNING id`,
     [email],
   );
-  await recordAttestation(
-    pool,
-    rows[0].id,
-    "data_processing_terms",
-    DATA_PROCESSING_TERMS.version,
-  );
+  await recordAttestation(pool, rows[0].id, "data_processing_terms");
   await issueCode(pool, send, rows[0].id, email);
   return "ok";
 }

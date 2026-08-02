@@ -11,7 +11,7 @@ import {
   enableGroup,
   listGroups,
 } from "./subscriptions.ts";
-import { DATA_PROCESSING_TERMS, listAttestations } from "./attestations.ts";
+import { ATTESTATION_TEXTS, DATA_PROCESSING_TERMS, listAttestations } from "./attestations.ts";
 import {
   ONBOARDING_DISCLOSURE,
   createConnection,
@@ -472,6 +472,14 @@ export function createApp(deps: {
 
       if (req.method === "GET" && url.pathname === "/v1/attestations") {
         send(res, 200, { attestations: await listAttestations(pool, userId) });
+        return;
+      }
+
+      // Ticket 21 (§21): every wording a client must show before echoing its
+      // version, in one place. The group and Tier 1 affirmations had versions
+      // with no text behind them until this route existed.
+      if (req.method === "GET" && url.pathname === "/v1/attestation-texts") {
+        send(res, 200, ATTESTATION_TEXTS);
         return;
       }
 

@@ -1,7 +1,7 @@
 import type pg from "pg";
 import type { GatewayPort } from "./gateway/port.ts";
 import { processingBlock, type BlockReason } from "./block.ts";
-import { recordAttestation } from "./attestations.ts";
+import { ATTESTATION_TEXTS, recordAttestation } from "./attestations.ts";
 
 // Tier 1 (spec §47–48): opt-in outbound to others. Tier 0 stays the default —
 // nothing here runs unless the user explicitly authorized outbound and accepted
@@ -17,11 +17,14 @@ export async function enableTier1(
   userId: string,
   authorizationVersion: unknown,
 ): Promise<"authorization_required" | { tier1_enabled: true }> {
-  if (typeof authorizationVersion !== "string" || authorizationVersion.length === 0)
+  // Ticket 21 (§21): any non-empty string used to pass, so the stored version
+  // named no wording at all. It must now be the version of the authorisation
+  // text WALAO actually shows, same gate as the other three affirmations.
+  if (authorizationVersion !== ATTESTATION_TEXTS.tier1_outbound.version)
     return "authorization_required";
   // Ticket 19: the authorisation is an Attestation row; tier1_enabled_at stays
   // as the fast lookup the outbound path reads.
-  await recordAttestation(pool, userId, "tier1_outbound", authorizationVersion);
+  await recordAttestation(pool, userId, "tier1_outbound");
   await pool.query(
     `UPDATE users SET tier1_enabled_at = COALESCE(tier1_enabled_at, now()) WHERE id = $1`,
     [userId],

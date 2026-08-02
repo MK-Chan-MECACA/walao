@@ -1,12 +1,12 @@
 import type pg from "pg";
 import { PLANS } from "./billing.ts";
-import { recordAttestation } from "./attestations.ts";
+import { ATTESTATION_TEXTS, recordAttestation } from "./attestations.ts";
 import type { GatewayPort } from "./gateway/port.ts";
 
-// Bump when the attestation wording shown to the user changes. Enabling
-// requires the client to echo the current version, proving the user saw the
-// text that is actually recorded in the audit trail.
-export const ATTESTATION_VERSION = "2026-07-30";
+// Enabling requires the client to echo the current version, proving the user
+// saw the wording — which lives in ATTESTATION_TEXTS and is copied onto the
+// Attestation row (§21). Bump the version there when the wording changes.
+export const ATTESTATION_VERSION = ATTESTATION_TEXTS.group_responsibility.version;
 
 export const DISCLOSURE_TEMPLATE = {
   version: "2026-07-30",
@@ -47,7 +47,7 @@ export async function enableGroup(
   attestationVersion: unknown,
 ): Promise<ToggleResult> {
   if (attestationVersion !== ATTESTATION_VERSION) return "attestation_required";
-  return setEnabled(pool, userId, groupId, true, ATTESTATION_VERSION);
+  return setEnabled(pool, userId, groupId, true);
 }
 
 export function disableGroup(
@@ -55,7 +55,7 @@ export function disableGroup(
   userId: string,
   groupId: string,
 ): Promise<ToggleResult> {
-  return setEnabled(pool, userId, groupId, false, null);
+  return setEnabled(pool, userId, groupId, false);
 }
 
 async function setEnabled(
@@ -63,7 +63,6 @@ async function setEnabled(
   userId: string,
   groupId: string,
   enabled: boolean,
-  attestationVersion: string | null,
 ): Promise<ToggleResult> {
   const client = await pool.connect();
   try {
@@ -109,7 +108,6 @@ async function setEnabled(
       client,
       userId,
       enabled ? "group_responsibility" : "group_disabled",
-      attestationVersion,
       groupId,
     );
     await client.query("COMMIT");

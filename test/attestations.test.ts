@@ -1,9 +1,11 @@
 import { after, before, beforeEach, test } from "node:test";
 import assert from "node:assert/strict";
 import { makeHarness, type Harness } from "./helpers.ts";
-import { DATA_PROCESSING_TERMS as TERMS } from "../src/attestations.ts";
+import { ATTESTATION_TEXTS, DATA_PROCESSING_TERMS as TERMS } from "../src/attestations.ts";
 import { ONBOARDING_DISCLOSURE } from "../src/connections.ts";
 import { ATTESTATION_VERSION } from "../src/subscriptions.ts";
+
+const TIER1_VERSION = ATTESTATION_TEXTS.tier1_outbound.version;
 
 // Ticket 19 (spec §6, §8, §20-21, §77, §205-210): every affirmation is stored
 // with the version of the wording that was shown, in one trail the Account can
@@ -90,14 +92,14 @@ test("pairing, enabling a Group and Tier 1 each leave their own Attestation", as
   );
 
   assert.equal(
-    (await h.api(token, "POST", "/v1/tier1", { authorization_version: "2026-07-31" })).status,
+    (await h.api(token, "POST", "/v1/tier1", { authorization_version: TIER1_VERSION })).status,
     200,
   );
 
   assert.deepEqual(await trail(token), [
     { kind: "ban_risk", version: ONBOARDING_DISCLOSURE.version, group_id: null },
     { kind: "group_responsibility", version: ATTESTATION_VERSION, group_id: groupId },
-    { kind: "tier1_outbound", version: "2026-07-31", group_id: null },
+    { kind: "tier1_outbound", version: TIER1_VERSION, group_id: null },
   ]);
 
   // Tier 1 still works off the fast lookup now that the version column is gone.
@@ -130,4 +132,101 @@ test("one Account's trail is invisible to another", async () => {
 
   assert.equal((await trail("tok-alice")).length, 1);
   assert.deepEqual(await trail("tok-bob"), []);
+});
+
+// Ticket 21 (spec §21): the version alone only proves the consent basis while
+// today's constants still hold yesterday's words. The row carries the wording.
+
+test("every affirmation kind has wording, and it is reachable by the client", async () => {
+  const token = "tok-texts";
+  await h.seedUser(token);
+  const res = await h.api(token, "GET", "/v1/attestation-texts");
+  assert.equal(res.status, 200);
+  assert.deepEqual(res.body, ATTESTATION_TEXTS);
+  for (const [kind, w] of Object.entries(ATTESTATION_TEXTS)) {
+    assert.ok(w.version.length > 0, `${kind} has no version`);
+    assert.ok(w.text.length > 50, `${kind} has no wording`);
+  }
+});
+
+test("each Attestation stores the exact wording shown, and the audit trail returns it", async () => {
+  const signup = await h.api("", "POST", "/v1/signup", {
+    email: "proof@example.com",
+    terms_version: TERMS.version,
+  });
+  assert.equal(signup.status, 202);
+  const token = (
+    (await h.api("", "POST", "/v1/verify", {
+      email: "proof@example.com",
+      code: h.codes.at(-1)?.code,
+    }))
+      .body as { token: string }
+  ).token;
+  const userId = (
+    await h.pool.query(`SELECT id FROM users WHERE email = $1`, ["proof@example.com"])
+  ).rows[0].id;
+
+  assert.equal(
+    (await h.api(token, "POST", "/v1/connections", {
+      disclosure_version: ONBOARDING_DISCLOSURE.version,
+    })).status,
+    201,
+  );
+  const sessionId = await h.seedSession(userId, "sess-proof");
+  const groupId = await h.seedGroup(sessionId, "group-proof@g.us", false);
+  assert.equal(
+    (await h.api(token, "POST", `/v1/groups/${groupId}/enable`, {
+      attestation_version: ATTESTATION_VERSION,
+    })).status,
+    200,
+  );
+  assert.equal(
+    (await h.api(token, "POST", "/v1/tier1", { authorization_version: TIER1_VERSION })).status,
+    200,
+  );
+  assert.equal((await h.api(token, "POST", `/v1/groups/${groupId}/disable`, {})).status, 200);
+
+  const rows = (
+    (await h.api(token, "GET", "/v1/attestations")).body as {
+      attestations: { kind: string; version: string | null; text: string | null }[];
+    }
+  ).attestations;
+  assert.deepEqual(
+    rows.map((r) => r.kind),
+    [
+      "data_processing_terms",
+      "ban_risk",
+      "group_responsibility",
+      "tier1_outbound",
+      "group_disabled",
+    ],
+  );
+  for (const r of rows.slice(0, 4)) {
+    const w = ATTESTATION_TEXTS[r.kind as keyof typeof ATTESTATION_TEXTS];
+    assert.equal(r.version, w.version, `${r.kind} version`);
+    assert.equal(r.text, w.text, `${r.kind} wording`);
+  }
+  // Turning a Group off is an audit row, not an affirmation: no wording to store.
+  assert.equal(rows[4].version, null);
+  assert.equal(rows[4].text, null);
+
+  // The proof is the copy on the row, not the constant: rewriting the wording
+  // today cannot change what this Account was shown.
+  const stored = (
+    await h.pool.query(`SELECT text FROM attestations WHERE user_id = $1 AND kind = 'ban_risk'`, [
+      userId,
+    ])
+  ).rows[0].text;
+  assert.equal(stored, ONBOARDING_DISCLOSURE.text);
+});
+
+test("Tier 1 refuses an authorization version that names no wording", async () => {
+  const token = "tok-t1v";
+  await h.seedUser(token);
+  for (const authorization_version of [undefined, "", "tier1-v1", "1999-01-01"]) {
+    const res = await h.api(token, "POST", "/v1/tier1", { authorization_version });
+    assert.equal(res.status, 400, `expected 400 for ${JSON.stringify(authorization_version)}`);
+    assert.deepEqual(res.body, { error: "authorization_required" });
+  }
+  assert.deepEqual(await trail(token), []);
 });

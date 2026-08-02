@@ -8,6 +8,9 @@ import {
   type Harness,
 } from "./helpers.ts";
 import { ONBOARDING_DISCLOSURE } from "../src/connections.ts";
+import { ATTESTATION_TEXTS } from "../src/attestations.ts";
+
+const TIER1_VERSION = ATTESTATION_TEXTS.tier1_outbound.version;
 
 // Ticket 14 (spec §49): product-wide gateway halt switch. Whole-system seam:
 // real ingress + API + delivery drain, sends captured by the fake gateway.
@@ -60,7 +63,7 @@ test("halt stops all gateway activity: webhooks refused, sends and pairing block
   const sessionId = await h.seedSession(userId, "sess-op1");
   const groupId = await h.seedGroup(sessionId, "group-1@g.us");
   await seedPendingSummary(userId, groupId, new Date());
-  await h.api("op1", "POST", "/v1/tier1", { authorization_version: "tier1-v1" });
+  await h.api("op1", "POST", "/v1/tier1", { authorization_version: TIER1_VERSION });
 
   assert.equal((await opPost("/admin/halt", OPERATOR_SECRET)).status, 200);
 

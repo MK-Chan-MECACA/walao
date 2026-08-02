@@ -34,8 +34,9 @@ _Avoid_: Participant, Contact, Third party
 **Attestation**:
 A dated, versioned record of something an Account holder affirmed — that they
 are responsible for a Group they enabled, that they accept WhatsApp ban risk at
-pairing, or that they accept the data-processing terms. Always stored with the
-version of the wording shown.
+pairing, that they authorise Tier 1 outbound, or that they accept the
+data-processing terms. Stored with both the version and the exact wording that
+was shown, so later edits to the copy cannot rewrite what was agreed.
 _Avoid_: Consent, Acceptance, Agreement, T&C tick
 
 **Processing Block**:
