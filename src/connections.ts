@@ -2,6 +2,7 @@ import type pg from "pg";
 import type { GatewayPort, NormalizedStatus, SessionStatus } from "./gateway/port.ts";
 import { isHalted } from "./halt.ts";
 import { ATTESTATION_TEXTS, recordAttestation } from "./attestations.ts";
+import { grantTrial } from "./billing.ts";
 
 // Shown before pairing. POST /v1/connections must echo the current version
 // (same pattern as the group attestation) so pairing cannot start unseen, and
@@ -74,7 +75,11 @@ export async function disconnectConnection(
 }
 
 // Gateway-reported state change arriving on the webhook. Unknown session: no-op.
-export async function applyGatewayStatus(pool: pg.Pool, evt: NormalizedStatus): Promise<void> {
+export async function applyGatewayStatus(
+  pool: pg.Pool,
+  gateway: GatewayPort,
+  evt: NormalizedStatus,
+): Promise<void> {
   await transition(
     pool,
     `UPDATE whatsapp_sessions SET status = $2, status_changed_at = now()
@@ -82,6 +87,37 @@ export async function applyGatewayStatus(pool: pg.Pool, evt: NormalizedStatus): 
     [evt.sessionExternalId, evt.status],
     evt.status,
   );
+  if (evt.status === "connected") await startTrial(pool, gateway, evt.sessionExternalId);
+}
+
+// Ticket 25 (spec §96-99, §232): reaching 'connected' is what "pairing
+// completes" means, so the Trial starts here rather than at POST /v1/connections
+// — a pairing code that was never scanned grants nothing.
+//
+// A gateway hiccup replays 'connected' on every reconnect, so the Account's own
+// Trial is checked before the gateway is asked for anything. An Account whose
+// number was already trialed elsewhere costs one /me call per reconnect and
+// still gets no Trial, which is the point of story §97.
+// ponytail: that repeat lookup is fine at one call per reconnect; store the
+// number hash on the Session if reconnect storms ever make it matter.
+async function startTrial(
+  pool: pg.Pool,
+  gateway: GatewayPort,
+  sessionExternalId: string,
+): Promise<void> {
+  const { rows } = await pool.query(
+    `SELECT s.user_id FROM whatsapp_sessions s
+      WHERE s.external_session_id = $1
+        AND NOT EXISTS (SELECT 1 FROM trials t WHERE t.user_id = s.user_id)`,
+    [sessionExternalId],
+  );
+  const userId = rows[0]?.user_id as string | undefined;
+  if (!userId) return;
+  // A gateway that cannot name the paired number must not cost the Account its
+  // Trial silently — but it also must not mint one that isn't tied to a number,
+  // or story §97 stops holding. No number, no grant; the next 'connected' retries.
+  const numberSha256 = await gateway.sessionNumberSha256(sessionExternalId).catch(() => null);
+  if (numberSha256) await grantTrial(pool, userId, numberSha256);
 }
 
 // Ticket 20 (spec §13-14, §242-245, ADR-0001). One gateway process holds every

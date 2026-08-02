@@ -1,4 +1,5 @@
 import type { GatewayEvent, GatewayPort, NormalizedEvent, SessionStatus } from "./port.ts";
+import { hashToken } from "../crypto.ts";
 
 // WAAPI Gateway adapter (github.com/mecaca-global-inc/waapi-gateway).
 // This is the ONLY module that knows the gateway's wire shape.
@@ -145,6 +146,14 @@ export class WaapiGateway implements GatewayPort {
     text: string,
   ): Promise<void> {
     await this.sendText(externalSessionId, recipientJid, text);
+  }
+
+  // /me is the same call sendToSelf makes; its jid is the paired number. The
+  // hash is taken here so nothing above the port ever holds the number itself.
+  async sessionNumberSha256(externalSessionId: string): Promise<string | null> {
+    const me = asRecord(await this.call("GET", `/api/${externalSessionId}/me`));
+    const number = toChatId(str(me.jid, "jid"));
+    return number ? hashToken(number) : null;
   }
 
   async listGroups(

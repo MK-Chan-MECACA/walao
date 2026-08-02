@@ -1,5 +1,5 @@
 import type pg from "pg";
-import { PLANS } from "./billing.ts";
+import { PLANS, getPlan } from "./billing.ts";
 import { ATTESTATION_TEXTS, recordAttestation } from "./attestations.ts";
 import type { GatewayPort } from "./gateway/port.ts";
 
@@ -72,10 +72,8 @@ async function setEnabled(
       // serializes concurrent enables so the cap can't be raced past. The
       // target group is excluded so re-attesting an already-enabled group
       // at the cap still works.
-      const plan = await client.query(`SELECT plan FROM users WHERE id = $1 FOR UPDATE`, [
-        userId,
-      ]);
-      const cap = PLANS[(plan.rows[0]?.plan ?? "free") as keyof typeof PLANS].max_groups;
+      await client.query(`SELECT 1 FROM users WHERE id = $1 FOR UPDATE`, [userId]);
+      const cap = PLANS[await getPlan(client, userId)].max_groups;
       const n = await client.query(
         `SELECT count(*)::int AS n FROM groups g
          JOIN whatsapp_sessions s ON s.id = g.session_id

@@ -43,6 +43,12 @@ export interface GatewayPort {
   // directly — tier1.ts owns the opt-in check and the recipient "Yes" handshake.
   sendToRecipient(externalSessionId: string, recipientJid: string, text: string): Promise<void>;
 
+  // SHA-256 of the paired WhatsApp number, or null if the session is not paired
+  // yet. Hashed inside the adapter (spec §233) so the raw number never reaches
+  // WALAO's storage — the Trial only needs to tell two numbers apart, never to
+  // read one. Metadata only.
+  sessionNumberSha256(externalSessionId: string): Promise<string | null>;
+
   // Group titles for a session. Providers may not carry the chat name on
   // message events (WAAPI does not), so discovery registers groups unnamed and
   // names are backfilled from here. Metadata only — never message content.

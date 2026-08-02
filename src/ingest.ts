@@ -40,7 +40,7 @@ export async function ingestWebhook(
   // Session status changes (ticket 3) are state updates, not data — applied
   // directly, no queue. Unknown sessions are ignored inside.
   if (evt.type === "status") {
-    await applyGatewayStatus(pool, evt);
+    await applyGatewayStatus(pool, gateway, evt);
     return { status: 202 };
   }
 

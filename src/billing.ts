@@ -15,9 +15,35 @@ export type PlanName = keyof typeof PLANS;
 
 type Db = pg.Pool | pg.PoolClient;
 
+// Trial (spec §96-99, §229-234): 14 days of Pro's caps starting when pairing
+// completes, no card. Expiry degrades the service to Free rather than ending it,
+// so there is nothing to clean up when it lapses — the row just stops counting.
+export const TRIAL_DAYS = 14;
+
+// The one place plan resolution lives: an active Trial IS Pro for as long as it
+// runs. Every cap reads through here (or through the same CASE in block.ts), so
+// a Trial account cannot be Pro at one gate and Free at the next.
 export async function getPlan(db: Db, userId: string): Promise<PlanName> {
-  const { rows } = await db.query(`SELECT plan FROM users WHERE id = $1`, [userId]);
+  const { rows } = await db.query(
+    `SELECT CASE WHEN EXISTS (SELECT 1 FROM trials t
+                               WHERE t.user_id = u.id AND t.ends_at > now())
+                 THEN 'pro' ELSE u.plan END AS plan
+     FROM users u WHERE u.id = $1`,
+    [userId],
+  );
   return (rows[0]?.plan ?? "free") as PlanName;
+}
+
+// Once per WhatsApp number, not once per Account (spec §97) — the unique index
+// on the hash is what enforces that, so a re-signup with the same number is a
+// no-op here rather than a second Trial.
+export async function grantTrial(db: Db, userId: string, numberSha256: string): Promise<void> {
+  await db.query(
+    `INSERT INTO trials (user_id, number_sha256, ends_at)
+     VALUES ($1, $2, now() + $3::interval)
+     ON CONFLICT (number_sha256) DO NOTHING`,
+    [userId, numberSha256, `${TRIAL_DAYS} days`],
+  );
 }
 
 // "Today" is the UTC day throughout.
@@ -45,13 +71,16 @@ export type Usage = {
   limits: (typeof PLANS)[PlanName];
   usage: { enabled_groups: number; messages_today: number; credits_today: number };
   groups: { group_id: string; name: string | null; credits_30d: number }[];
+  // Null once it lapses (spec §98-99): the caps above are already Free's again,
+  // and a finished Trial is not a state the user has to act on.
+  trial: { ends_at: string; days_remaining: number } | null;
 };
 
 // The visibility half of spec §51-53: plan, limits, current burn, and per-group
 // credit burn (last 30 days) so the user can spot and mute expensive groups.
 export async function getUsage(pool: pg.Pool, userId: string): Promise<Usage> {
   const plan = await getPlan(pool, userId);
-  const [groups, messages, credits, burn] = await Promise.all([
+  const [groups, messages, credits, burn, trial] = await Promise.all([
     pool.query(
       `SELECT count(*)::int AS n FROM groups g
        JOIN whatsapp_sessions s ON s.id = g.session_id
@@ -69,6 +98,13 @@ export async function getUsage(pool: pg.Pool, userId: string): Promise<Usage> {
        ORDER BY credits_30d DESC, g.name`,
       [userId],
     ),
+    // Days rounded up, so the last partial day still reads as "1 day left"
+    // rather than "0" while the Trial is genuinely still running.
+    pool.query(
+      `SELECT ends_at, ceil(extract(epoch FROM ends_at - now()) / 86400)::int AS days_remaining
+       FROM trials WHERE user_id = $1 AND ends_at > now()`,
+      [userId],
+    ),
   ]);
   return {
     plan,
@@ -79,5 +115,11 @@ export async function getUsage(pool: pg.Pool, userId: string): Promise<Usage> {
       credits_today: credits,
     },
     groups: burn.rows,
+    trial: trial.rows[0]
+      ? {
+          ends_at: new Date(trial.rows[0].ends_at as string).toISOString(),
+          days_remaining: trial.rows[0].days_remaining as number,
+        }
+      : null,
   };
 }

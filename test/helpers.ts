@@ -90,6 +90,16 @@ export class FakeGateway implements GatewayPort {
     this.recipientSends.push({ sessionExternalId, recipientJid, text });
   }
 
+  // Paired number per session id. Hashed here like a real adapter would, so a
+  // test that reuses a number exercises the once-per-number Trial rule for real.
+  // Pairing hands out session ids in order, so the default keeps every session
+  // on its own number unless a test deliberately collides them.
+  numbers: Record<string, string> = {};
+
+  async sessionNumberSha256(sessionExternalId: string): Promise<string | null> {
+    return hashToken(this.numbers[sessionExternalId] ?? `number-for-${sessionExternalId}`);
+  }
+
   // Group titles the fake gateway will report, keyed by session id. Tests that
   // exercise the name backfill set this; everyone else gets an empty list.
   groupNames: Record<string, Array<{ jid: string; name: string | null }>> = {};
@@ -337,13 +347,14 @@ export async function makeHarness(): Promise<Harness> {
       codes.length = 0;
       gateway.sends = [];
       gateway.recipientSends = [];
+      gateway.numbers = {};
       summarizer.canned = {};
       summarizer.calls = [];
       summarizer.fail = false;
       answerer.canned = {};
       answerer.calls = [];
       await pool.query(
-        `TRUNCATE messages, summaries, summary_jobs, summary_schedules, attestations, coverage_gaps, groups, whatsapp_sessions, users, ingest_events, privacy_audit, quality_reviews RESTART IDENTITY CASCADE`,
+        `TRUNCATE messages, summaries, summary_jobs, summary_schedules, attestations, coverage_gaps, groups, whatsapp_sessions, users, ingest_events, privacy_audit, quality_reviews, trials RESTART IDENTITY CASCADE`,
       );
       // system_halt is a singleton row, not per-test data — un-halt, don't truncate.
       await pool.query(`UPDATE system_halt SET halted = false`);

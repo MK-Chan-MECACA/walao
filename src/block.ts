@@ -54,7 +54,13 @@ export async function processingBlock(
   const { groupId, stage } = opts;
   const { rows } = await db.query(
     `SELECT (SELECT halted FROM system_halt) AS halted,
-            u.paused, u.unpaid, u.plan,
+            u.paused, u.unpaid,
+            -- Same plan resolution as billing.getPlan: an active Trial is Pro
+            -- (spec §232). Inlined rather than a second round trip because this
+            -- runs per item on the drain path.
+            CASE WHEN EXISTS (SELECT 1 FROM trials t
+                               WHERE t.user_id = u.id AND t.ends_at > now())
+                 THEN 'pro' ELSE u.plan END AS plan,
             EXISTS (SELECT 1 FROM whatsapp_sessions
                      WHERE user_id = u.id AND status = 'connected') AS connected,
             EXISTS (SELECT 1 FROM whatsapp_sessions
