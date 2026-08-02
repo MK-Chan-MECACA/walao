@@ -2,6 +2,7 @@ import { test, before, after, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import { makeHarness, buildEvent, countIngestEvents, type Harness } from "./helpers.ts";
 import { ATTESTATION_VERSION } from "../src/subscriptions.ts";
+import { tickScheduler } from "../src/scheduler.ts";
 
 // Ticket 2 zero-tolerance invariant: unauthorized groups processed = 0.
 let h: Harness;
@@ -108,6 +109,33 @@ test("disabling immediately stops storage — including events already queued", 
   const audit = await h.api(token, "GET", "/v1/attestations");
   const records = (audit.body as { attestations: Array<{ kind: string }> }).attestations;
   assert.deepEqual(records.map((r) => r.kind), ["group_disabled"]);
+});
+
+test("disabling cancels a summary job queued while the group was on", async () => {
+  const token = "tok";
+  const userId = await h.seedUser(token);
+  const sessionId = await h.seedSession(userId, "sess-1");
+  const groupId = await h.seedGroup(sessionId, "group-1@g.us", true);
+  assert.equal(
+    (
+      await h.api(token, "PUT", `/v1/groups/${groupId}/schedule`, {
+        local_time: "09:00",
+        timezone: "Asia/Kuala_Lumpur",
+        language: "en",
+      })
+    ).status,
+    200,
+  );
+  await h.seedMessage(groupId, "m1", "2026-07-30T00:30:00Z", { text: "Approved the order" });
+  assert.equal((await tickScheduler(h.pool, new Date("2026-07-30T01:00:00Z"))).length, 1);
+
+  assert.equal((await h.api(token, "POST", `/v1/groups/${groupId}/disable`)).status, 200);
+
+  assert.equal(await h.summarize(), 0); // the queued job never reaches the model
+  const { rows } = await h.pool.query(`SELECT status FROM summary_jobs`);
+  assert.deepEqual(rows.map((r) => r.status), ["cancelled"]);
+  const { rows: summaries } = await h.pool.query(`SELECT id FROM summaries`);
+  assert.equal(summaries.length, 0);
 });
 
 test("a user cannot enable another user's group", async () => {

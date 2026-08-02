@@ -104,6 +104,16 @@ async function setEnabled(
       await client.query("ROLLBACK");
       return "not_found";
     }
+    if (!enabled) {
+      // Spec §22: disabling stops processing immediately. Ingestion and the
+      // consumer already drop events for a disabled group, but a summary job
+      // queued while it was on would still summarise afterwards — so it is
+      // cancelled in the same transaction as the flag flip and the audit row.
+      await client.query(
+        `UPDATE summary_jobs SET status = 'cancelled' WHERE group_id = $1 AND status = 'pending'`,
+        [groupId],
+      );
+    }
     await recordAttestation(
       client,
       userId,
