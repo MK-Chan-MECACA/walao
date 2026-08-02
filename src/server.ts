@@ -8,6 +8,7 @@ import { tickScheduler } from "./scheduler.ts";
 import { deliverSummaries } from "./deliver.ts";
 import { processSummaryJobs } from "./summarize.ts";
 import { backfillGroupNames } from "./subscriptions.ts";
+import { evictIdleSessions } from "./connections.ts";
 import { LocalSummarizer } from "./summarizer/local.ts";
 import { AnthropicSummarizer } from "./summarizer/anthropic.ts";
 import type { AnswererPort } from "./ask.ts";
@@ -63,6 +64,9 @@ async function main(): Promise<void> {
     backfillGroupNames(pool, gateway).catch((err) =>
       console.error("group name backfill error", err),
     );
+    // ponytail: eviction rides the 60s timer — a 14-day threshold does not care
+    // about the minute. Move it to a daily cron if the scan ever costs anything.
+    evictIdleSessions(pool).catch((err) => console.error("session eviction error", err));
   }, 60_000);
   nameTimer.unref();
 

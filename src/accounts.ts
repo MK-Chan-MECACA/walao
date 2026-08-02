@@ -109,6 +109,7 @@ export async function verify(
     `UPDATE users
      SET api_token_sha256 = $2,
          email_verified_at = COALESCE(email_verified_at, now()),
+         last_login_at = now(),
          login_code_sha256 = NULL,
          login_code_expires_at = NULL
      WHERE id = $1`,

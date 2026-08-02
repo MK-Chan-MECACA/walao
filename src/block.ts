@@ -127,14 +127,21 @@ export async function getStatus(pool: pg.Pool, userId: string): Promise<Status> 
   const [block, sess, gap] = await Promise.all([
     processingBlock(pool, userId),
     pool.query(
+      // Newest first: after an eviction (ticket 20) the retired Session row stays
+      // for its history, and the one the Account just paired is the one it asked
+      // about. With the one-Session-per-Account rule this is the same row anyway.
       `SELECT status, status_changed_at FROM whatsapp_sessions
-       WHERE user_id = $1 ORDER BY created_at LIMIT 1`,
+       WHERE user_id = $1 ORDER BY created_at DESC LIMIT 1`,
       [userId],
     ),
     pool.query(
+      // Same Session the status line reports: an evicted Session's gap stays
+      // open as the record of the window it lost, but "is WALAO covering me now"
+      // is a question about the Session the Account currently holds.
       `SELECT cg.reason, cg.started_at FROM coverage_gaps cg
-       JOIN whatsapp_sessions s ON s.id = cg.session_id
-       WHERE s.user_id = $1 AND cg.ended_at IS NULL
+       WHERE cg.session_id = (SELECT id FROM whatsapp_sessions
+                               WHERE user_id = $1 ORDER BY created_at DESC LIMIT 1)
+         AND cg.ended_at IS NULL
        ORDER BY cg.started_at LIMIT 1`,
       [userId],
     ),

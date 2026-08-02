@@ -95,6 +95,41 @@ export async function applyGatewayStatus(pool: pg.Pool, evt: NormalizedStatus): 
   );
 }
 
+// Ticket 20 (spec §13-14, §242-245, ADR-0001). One gateway process holds every
+// Account's Session, so a Session with no enabled Group and nobody logging in is
+// capacity spent on nothing. Retiring it to 're_pair_required' is a capacity
+// control, not a punishment: the Account pairs again and is whole. The eviction
+// opens a Coverage Gap like any other loss of coverage, so Summaries spanning
+// the idle window say so instead of presenting themselves as complete.
+//
+// Idleness is measured from the last login, falling back to when the Session was
+// created — an Account that paired and never came back is exactly the case this
+// exists for. One statement so the flip and its gap cannot land apart.
+export const IDLE_EVICTION_DAYS = 14;
+
+export async function evictIdleSessions(pool: pg.Pool): Promise<number> {
+  const { rows } = await pool.query(
+    `WITH evicted AS (
+       UPDATE whatsapp_sessions s
+          SET status = 're_pair_required', status_changed_at = now()
+        WHERE s.status <> 're_pair_required'
+          AND NOT EXISTS (SELECT 1 FROM groups g WHERE g.session_id = s.id AND g.enabled)
+          AND COALESCE((SELECT u.last_login_at FROM users u WHERE u.id = s.user_id),
+                       s.created_at) < now() - $1::interval
+        RETURNING s.id
+     ), gaps AS (
+       INSERT INTO coverage_gaps (session_id, reason)
+       SELECT e.id, 're_pair_required' FROM evicted e
+        WHERE NOT EXISTS (SELECT 1 FROM coverage_gaps cg
+                           WHERE cg.session_id = e.id AND cg.ended_at IS NULL)
+       RETURNING session_id
+     )
+     SELECT count(*)::int AS n FROM evicted`,
+    [`${IDLE_EVICTION_DAYS} days`],
+  );
+  return rows[0].n as number;
+}
+
 // Flip the session status and keep coverage_gaps consistent in one transaction:
 // leaving 'connected' opens a gap (at most one open per session), returning to
 // 'connected' closes any open gap. Downstream summary windows overlapping a gap
