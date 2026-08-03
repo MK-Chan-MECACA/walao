@@ -5,6 +5,26 @@ import type pg from "pg";
 // Malay-primary beta user once recruited — change this constant then.
 export const MALAY_QUALITY_OWNER = "product-owner";
 
+// Ticket 27 (§107): the Account grants or revokes the one exception to the
+// operator boundary. Revoking pulls its Summaries out of the queue immediately;
+// reviews already recorded stay, they are the quality trail (§112).
+export async function setQualityReviewOptIn(
+  pool: pg.Pool,
+  userId: string,
+  optIn: unknown,
+): Promise<"invalid" | boolean> {
+  if (typeof optIn !== "boolean") return "invalid";
+  await pool.query(`UPDATE users SET quality_review_opt_in = $2 WHERE id = $1`, [userId, optIn]);
+  return optIn;
+}
+
+export async function getQualityReviewOptIn(pool: pg.Pool, userId: string): Promise<boolean> {
+  const { rows } = await pool.query(`SELECT quality_review_opt_in FROM users WHERE id = $1`, [
+    userId,
+  ]);
+  return rows[0]?.quality_review_opt_in ?? false;
+}
+
 // Everything reviewable in the last 7 days. Malay summaries are listed
 // individually until each has a review (§54); the beta lane is one weekly
 // record of accuracy/omission/privacy-event counts (§55).
@@ -13,8 +33,9 @@ export async function reviewQueue(pool: pg.Pool): Promise<unknown> {
     pool.query(
       `SELECT s.id AS summary_id, s.user_id, s.group_id, s.window_start, s.window_end,
               s.payload, s.created_at
-       FROM summaries s
+       FROM summaries s JOIN users u ON u.id = s.user_id
        WHERE s.language = 'ms'
+         AND u.quality_review_opt_in
          AND s.created_at > now() - interval '7 days'
          AND NOT EXISTS (SELECT 1 FROM quality_reviews q WHERE q.summary_id = s.id)
        ORDER BY s.created_at`,
@@ -53,7 +74,8 @@ export async function recordReview(
     // One review per summary (015's unique index); a resubmit corrects it.
     const { rows } = await pool.query(
       `INSERT INTO quality_reviews (kind, summary_id, reviewer, verdict)
-       SELECT 'malay', s.id, $2, $3 FROM summaries s WHERE s.id = $1 AND s.language = 'ms'
+       SELECT 'malay', s.id, $2, $3 FROM summaries s JOIN users u ON u.id = s.user_id
+       WHERE s.id = $1 AND s.language = 'ms' AND u.quality_review_opt_in
        ON CONFLICT (summary_id) WHERE kind = 'malay'
        DO UPDATE SET reviewer = EXCLUDED.reviewer, verdict = EXCLUDED.verdict
        RETURNING id`,

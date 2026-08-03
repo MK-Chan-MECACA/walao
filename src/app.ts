@@ -41,7 +41,12 @@ import { askQuestion, type AnswererPort } from "./ask.ts";
 import { enableTier1, sendOutbound } from "./tier1.ts";
 import { isHalted, setHalted } from "./halt.ts";
 import { getStatus } from "./block.ts";
-import { recordReview, reviewQueue } from "./quality.ts";
+import {
+  getQualityReviewOptIn,
+  recordReview,
+  reviewQueue,
+  setQualityReviewOptIn,
+} from "./quality.ts";
 import { cancelPlan, getUsage } from "./billing.ts";
 import { login, signup, verify, type SendCode } from "./accounts.ts";
 import { hashToken } from "./crypto.ts";
@@ -493,6 +498,35 @@ export function createApp(deps: {
       if (req.method === "GET" && url.pathname === "/v1/disclosure-template") {
         send(res, 200, DISCLOSURE_TEMPLATE);
         return;
+      }
+
+      // Ticket 27 (§107): opting Operators in to reading this Account's
+      // Summaries for quality review, and opting back out.
+      if (url.pathname === "/v1/quality-review") {
+        if (req.method === "GET") {
+          send(res, 200, { opt_in: await getQualityReviewOptIn(pool, userId) });
+          return;
+        }
+        if (req.method === "PUT") {
+          let body: unknown = {};
+          try {
+            body = JSON.parse((await readRawBody(req)).toString("utf8") || "{}");
+          } catch {
+            send(res, 400, { error: "bad_json" });
+            return;
+          }
+          const result = await setQualityReviewOptIn(
+            pool,
+            userId,
+            (body as Record<string, unknown>).opt_in,
+          );
+          if (result === "invalid") {
+            send(res, 400, { error: "invalid_opt_in" });
+            return;
+          }
+          send(res, 200, { opt_in: result });
+          return;
+        }
       }
 
       if (req.method === "GET" && url.pathname === "/v1/retention") {

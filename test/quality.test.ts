@@ -35,6 +35,7 @@ test("Malay lane (§54): unreviewed ms summaries queue under the named owner; a 
   const groupId = await h.seedGroup(sessionId, "g1@g.us");
   const msId = await h.seedSummary(userId, groupId, {}, { language: "ms" });
   const enId = await h.seedSummary(userId, groupId);
+  await h.api("q1", "PUT", "/v1/quality-review", { opt_in: true }); // §107
 
   const queue = (await (await op("GET", "/admin/review/queue")).json()) as any;
   assert.equal(queue.malay.quality_owner, MALAY_QUALITY_OWNER);
@@ -101,6 +102,49 @@ test("Malay lane (§54): unreviewed ms summaries queue under the named owner; a 
   const kept = await h.pool.query(`SELECT summary_id FROM quality_reviews WHERE kind = 'malay'`);
   assert.equal(kept.rows.length, 1);
   assert.equal(kept.rows[0].summary_id, null);
+});
+
+test("§106-107: an Operator sees no Summary body until the Account opts in, and none after it opts out", async () => {
+  const userId = await h.seedUser("q3");
+  const sessionId = await h.seedSession(userId, "sess-q3");
+  const groupId = await h.seedGroup(sessionId, "g1@g.us");
+  const msId = await h.seedSummary(
+    userId,
+    groupId,
+    { highlights: [{ text: "rahsia", source_message_ids: [] }] },
+    { language: "ms" },
+  );
+  const optIn = async (body?: unknown) =>
+    (await h.api("q3", body === undefined ? "GET" : "PUT", "/v1/quality-review", body)) as {
+      status: number;
+      body: { opt_in: boolean };
+    };
+
+  // Default is off: the body is nowhere in the operator's response.
+  assert.equal((await optIn()).body.opt_in, false);
+  let queue = await (await op("GET", "/admin/review/queue")).text();
+  assert.equal(queue.includes("rahsia"), false);
+
+  // Nor can the Operator review a summary it was never allowed to read.
+  const blind = await op("POST", "/admin/review", {
+    kind: "malay",
+    summary_id: msId,
+    reviewer: "product-owner",
+    verdict: { ok: true },
+  });
+  assert.equal(blind.status, 404);
+
+  // opt_in must be a boolean — "yes" is not consent.
+  assert.equal((await optIn({ opt_in: "yes" })).status, 400);
+
+  assert.equal((await optIn({ opt_in: true })).body.opt_in, true);
+  queue = await (await op("GET", "/admin/review/queue")).text();
+  assert.equal(queue.includes("rahsia"), true);
+
+  // Opting back out withdraws it again.
+  assert.equal((await optIn({ opt_in: false })).body.opt_in, false);
+  queue = await (await op("GET", "/admin/review/queue")).text();
+  assert.equal(queue.includes("rahsia"), false);
 });
 
 test("beta lane (§55): weekly stats visible, counts required, reviewed flag flips", async () => {
