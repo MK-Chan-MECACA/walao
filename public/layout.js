@@ -45,6 +45,66 @@ export function fmtDate(iso) {
   return isNaN(d) ? iso : d.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
 }
 
+// §20, §39: the exact messages a Brief item, Memory candidate, Memory or
+// Reminder was drawn from, fetched only when the disclosure is opened. `refs` is
+// anything carrying { summary_id, source_message_ids } — the shape every cited
+// thing in the API already has. An absent or empty id list means "everything
+// this Summary cites", which is the only provenance a Reminder carries.
+// One <details>, no state to keep.
+const cited = new Map(); // summary_id -> Promise<SourceMessage[]>
+
+export function citations(refs) {
+  const body = el("div", { class: "sources muted", text: "Loading…" });
+  return el(
+    "details",
+    {
+      ontoggle: (e) => {
+        if (e.target.open && !e.target.dataset.loaded) {
+          e.target.dataset.loaded = "1";
+          showSources(body, refs);
+        }
+      },
+    },
+    el("summary", { text: "Sources" }),
+    body,
+  );
+}
+
+async function showSources(body, refs) {
+  const lines = [];
+  for (const r of refs) {
+    if (!r.summary_id) continue;
+    if (!cited.has(r.summary_id)) {
+      cited.set(
+        r.summary_id,
+        api("GET", `/v1/summaries/${r.summary_id}/sources`).then((d) => d.sources),
+      );
+    }
+    let msgs;
+    try {
+      msgs = await cited.get(r.summary_id);
+    } catch (err) {
+      lines.push(el("p", { class: "error", text: message(err) }));
+      continue;
+    }
+    const ids = r.source_message_ids;
+    for (const m of msgs.filter((m) => !ids?.length || ids.includes(m.id))) {
+      lines.push(
+        el(
+          "p",
+          { class: "source" },
+          el("span", { class: "muted", text: `${m.sender_ref ?? "unknown"} · ${fmtDate(m.sent_at)}` }),
+          el("span", { text: m.text }),
+        ),
+      );
+    }
+  }
+  body.classList.remove("muted");
+  body.replaceChildren(
+    ...(lines.length ? lines : [el("p", { class: "muted", text: "The cited messages have expired." })]),
+  );
+}
+
 // Renders nav + banner into <header id="chrome"> and returns the status, so a
 // page that needs the block reason does not fetch /v1/status twice.
 export async function mount(active) {

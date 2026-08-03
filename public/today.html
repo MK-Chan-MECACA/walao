@@ -48,7 +48,7 @@
 
     <script type="module">
       import { api, message } from "/api.js";
-      import { el, fmtDate, mount } from "/layout.js";
+      import { citations, el, fmtDate, mount } from "/layout.js";
 
       const $ = (id) => document.getElementById(id);
       const SECTIONS = [
@@ -65,7 +65,6 @@
       // shows the state of its first source and writes to all of them.
       const states = new Map();
       const sourceKey = (s) => `${s.summary_id}|${s.section}|${s.item_index}`;
-      const cited = new Map(); // summary_id -> Promise<SourceMessage[]>
 
       let summaries = [];
 
@@ -183,7 +182,8 @@
         }
 
         li.append(el("div", { class: "grow" }, el("p", { text: item.text }), chips), actions);
-        li.append(sourcesBlock(item));
+        // §20: the exact messages this item was drawn from, on demand.
+        li.append(citations(item.sources));
         return li;
       }
 
@@ -225,58 +225,6 @@
           button.disabled = false;
           fail(err);
         }
-      }
-
-      // §20: the exact messages an item was drawn from, fetched only when the
-      // merchant opens it. <details> does the disclosure; no JS state to keep.
-      function sourcesBlock(item) {
-        const body = el("div", { class: "sources muted", text: "Loading…" });
-        return el(
-          "details",
-          {
-            ontoggle: (e) => {
-              if (e.target.open && !e.target.dataset.loaded) {
-                e.target.dataset.loaded = "1";
-                showSources(body, item);
-              }
-            },
-          },
-          el("summary", { text: "Sources" }),
-          body,
-        );
-      }
-
-      async function showSources(body, item) {
-        const lines = [];
-        for (const s of item.sources) {
-          if (!cited.has(s.summary_id)) {
-            cited.set(
-              s.summary_id,
-              api("GET", `/v1/summaries/${s.summary_id}/sources`).then((d) => d.sources),
-            );
-          }
-          let msgs;
-          try {
-            msgs = await cited.get(s.summary_id);
-          } catch (err) {
-            lines.push(el("p", { class: "error", text: message(err) }));
-            continue;
-          }
-          for (const m of msgs.filter((m) => s.source_message_ids.includes(m.id))) {
-            lines.push(
-              el(
-                "p",
-                { class: "source" },
-                el("span", { class: "muted", text: `${m.sender_ref ?? "unknown"} · ${fmtDate(m.sent_at)}` }),
-                el("span", { text: m.text }),
-              ),
-            );
-          }
-        }
-        body.classList.remove("muted");
-        body.replaceChildren(
-          ...(lines.length ? lines : [el("p", { class: "muted", text: "The cited messages have expired." })]),
-        );
       }
 
       // §26: past Summaries by date and Group, from the same list already
