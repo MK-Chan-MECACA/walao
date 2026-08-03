@@ -224,7 +224,7 @@ export async function buildWeeklyReview(pool: pg.Pool, userId: string): Promise<
       ["decisions", decisions],
       ["open_questions", risks],
     ] as const) {
-      for (const it of payload[section] ?? []) {
+      for (const [index, it] of (payload[section] ?? []).entries()) {
         const key = it.text.trim().toLowerCase();
         let item = merged.get(key);
         if (!item) {
@@ -237,6 +237,8 @@ export async function buildWeeklyReview(pool: pg.Pool, userId: string): Promise<
           group_id: r.group_id as string,
           group_name: r.group_name as string | null,
           jump_url: jumpUrl(r.external_jid as string),
+          section,
+          item_index: index,
           source_message_ids: it.source_message_ids,
         });
       }

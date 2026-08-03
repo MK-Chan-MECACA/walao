@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>WALAO — groups</title>
+    <link rel="stylesheet" href="/app.css" />
+  </head>
+  <body>
+    <header id="chrome"></header>
+    <main>
+      <h1>Groups</h1>
+      <p id="cap" class="muted">Loading…</p>
+      <p id="over-cap" class="notice" hidden></p>
+      <p id="error" class="error" hidden></p>
+
+      <section class="card">
+        <h2>Before you enable a Group</h2>
+        <!-- §28: the Attestation is read and affirmed in the same action that
+             enables a Group — the Enable buttons stay inert until it is. -->
+        <div class="terms">
+          <span class="muted" id="attestation-version"></span>
+          <p id="attestation-text">Loading…</p>
+          <label class="check">
+            <input type="checkbox" id="attestation-ok" />
+            <span>I affirm this for every Group I enable.</span>
+          </label>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Tell the group</h2>
+        <!-- §29: telling the other members is the easy path, not homework. -->
+        <p class="muted">Paste this into any Group you enable.</p>
+        <textarea id="disclosure" rows="5" readonly>Loading…</textarea>
+        <button id="copy" class="secondary">Copy</button>
+      </section>
+
+      <section class="card">
+        <h2>Your Groups</h2>
+        <ul class="rows" id="groups">
+          <li class="muted">Loading…</li>
+        </ul>
+      </section>
+    </main>
+
+    <script type="module">
+      import { api, message } from "/api.js";
+      import { el, mount } from "/layout.js";
+
+      const $ = (id) => document.getElementById(id);
+      const LANGUAGES = [
+        ["en", "English"],
+        ["zh", "中文"],
+        ["ms", "Bahasa Melayu"],
+      ];
+      const HERE = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+      let attestation = null;
+
+      await mount("/groups");
+      load();
+
+      api("GET", "/v1/attestation-texts")
+        .then((texts) => {
+          attestation = texts.group_responsibility;
+          $("attestation-text").textContent = attestation.text;
+          $("attestation-version").textContent = `version ${attestation.version}`;
+        })
+        .catch((err) => {
+          $("attestation-text").textContent = message(err);
+        });
+
+      api("GET", "/v1/disclosure-template")
+        .then((d) => {
+          $("disclosure").value = d.text;
+        })
+        .catch((err) => {
+          $("disclosure").value = message(err);
+        });
+
+      $("copy").onclick = async () => {
+        try {
+          await navigator.clipboard.writeText($("disclosure").value);
+          $("copy").textContent = "Copied";
+        } catch {
+          // Clipboard access denied (or an insecure origin): selecting the text
+          // is the fallback that always works.
+          $("disclosure").select();
+          $("copy").textContent = "Press ⌘/Ctrl+C";
+        }
+      };
+
+      $("attestation-ok").onchange = (e) => {
+        for (const b of document.querySelectorAll("button.enable")) b.disabled = !e.target.checked;
+      };
+
+      function fail(err) {
+        $("error").textContent = message(err);
+        $("error").hidden = false;
+      }
+
+      async function load() {
+        $("error").hidden = true;
+        let groups, usage;
+        try {
+          [{ groups }, usage] = await Promise.all([
+            api("GET", "/v1/groups"),
+            api("GET", "/v1/usage"),
+          ]);
+        } catch (err) {
+          $("groups").replaceChildren(el("li", { class: "muted", text: message(err) }));
+          return;
+        }
+
+        const cap = usage.limits.max_groups;
+        const on = usage.usage.enabled_groups;
+        $("cap").textContent = `Plan ${usage.plan} · ${on} of ${cap} Group(s) enabled.`;
+        // §33: the cap is stated where the merchant would act on it.
+        $("over-cap").textContent =
+          `You have more Groups enabled than your Plan allows. The ones marked blocked below ` +
+          `are not being read — disable one, or upgrade your Plan.`;
+        $("over-cap").hidden = on <= cap;
+
+        $("groups").replaceChildren(
+          ...(groups.length
+            ? groups.map(row)
+            : [el("li", { class: "muted", text: "No Group is visible on this Session yet." })]),
+        );
+      }
+
+      function row(g) {
+        const name = g.name ?? g.external_jid;
+        const state = g.blocked ? "blocked" : g.enabled ? "enabled" : "off";
+        const label = {
+          blocked: "blocked — over your Plan's Group cap, not being read",
+          enabled: g.schedule
+            ? `enabled · ${g.schedule.local_time} ${g.schedule.timezone} · ${g.schedule.language}`
+            : "enabled · no summary time set yet",
+          off: "not enabled — WALAO is not reading it",
+        }[state];
+
+        const toggle = el("button", {
+          class: g.enabled ? "secondary" : "secondary enable",
+          text: g.enabled ? "Disable" : "Enable",
+          disabled: !g.enabled && !$("attestation-ok").checked,
+          onclick: () => setEnabled(g, !g.enabled),
+        });
+
+        return el(
+          "li",
+          { class: state },
+          el(
+            "div",
+            { class: "grow" },
+            el("strong", { text: name }),
+            el("span", { class: "muted", text: ` ${label}` }),
+          ),
+          toggle,
+          g.enabled ? scheduleForm(g) : null,
+          dataDeletion(g, name),
+        );
+      }
+
+      async function setEnabled(g, on) {
+        $("error").hidden = true;
+        try {
+          if (on) {
+            await api("POST", `/v1/groups/${g.id}/enable`, {
+              attestation_version: attestation?.version,
+            });
+          } else {
+            await api("POST", `/v1/groups/${g.id}/disable`);
+          }
+        } catch (err) {
+          // §34: a refusal at the cap is not a dead end — api.js words it with
+          // the options, and the cap line above stays on screen.
+          fail(err);
+        }
+        await mount("/groups"); // enabling can clear or raise a block
+        load();
+      }
+
+      // §31: when and in what language the Brief arrives. Only an enabled Group
+      // can carry a schedule, which is why this form only exists on one.
+      function scheduleForm(g) {
+        const time = el("input", { type: "time", value: g.schedule?.local_time ?? "18:00" });
+        const zone = el("input", { type: "text", value: g.schedule?.timezone ?? HERE });
+        const lang = el(
+          "select",
+          {},
+          ...LANGUAGES.map(([v, text]) =>
+            el("option", { value: v, text, selected: (g.schedule?.language ?? "en") === v }),
+          ),
+        );
+        const save = el("button", {
+          text: "Save schedule",
+          onclick: async () => {
+            save.disabled = true;
+            try {
+              await api("PUT", `/v1/groups/${g.id}/schedule`, {
+                local_time: time.value,
+                timezone: zone.value,
+                language: lang.value,
+              });
+              load();
+            } catch (err) {
+              save.disabled = false;
+              fail(err);
+            }
+          },
+        });
+        return el(
+          "details",
+          {},
+          el("summary", { text: "Summary time" }),
+          el(
+            "div",
+            { class: "form" },
+            el("label", { text: "Time" }),
+            time,
+            el("label", { text: "Timezone" }),
+            zone,
+            el("label", { text: "Language" }),
+            lang,
+            save,
+          ),
+        );
+      }
+
+      // §32: forgetting what was read is a separate choice from stopping the
+      // reading. Behind a disclosure so it is never one stray tap.
+      function dataDeletion(g, name) {
+        const go = el("button", {
+          class: "secondary",
+          text: "Delete stored data",
+          onclick: async () => {
+            go.disabled = true;
+            try {
+              await api("DELETE", `/v1/groups/${g.id}`);
+              load();
+            } catch (err) {
+              go.disabled = false;
+              fail(err);
+            }
+          },
+        });
+        return el(
+          "details",
+          {},
+          el("summary", { text: "Delete data" }),
+          el(
+            "div",
+            { class: "form" },
+            el("p", {
+              class: "muted",
+              text: `Deletes every stored message and Summary WALAO holds for ${name}. This cannot be undone. It does not disable the Group.`,
+            }),
+            go,
+          ),
+        );
+      }
+    </script>
+  </body>
+</html>

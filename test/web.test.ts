@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import http from "node:http";
 import { makeHarness, OPERATOR_SECRET, type Harness } from "./helpers.ts";
 import { DATA_PROCESSING_TERMS as TERMS } from "../src/attestations.ts";
+import { ATTESTATION_VERSION as VERSION } from "../src/subscriptions.ts";
 
 // Ticket 29 (app spec §1-5, §20, §41, §54-55): the backend the web surface
 // needs before a line of HTML exists — cookie sessions, a real logout, static
@@ -179,6 +180,8 @@ test("the app's own assets are served with the content types a browser needs", a
   for (const [path, type] of [
     ["/", /^text\/html/],
     ["/pair", /^text\/html/],
+    ["/today", /^text\/html/],
+    ["/groups", /^text\/html/],
     ["/app.css", /^text\/css/],
     ["/api.js", /^text\/javascript/],
     ["/layout.js", /^text\/javascript/],
@@ -257,4 +260,106 @@ test("an Operator trades the secret for an httpOnly cookie, and can hand it back
     (await raw("GET", "/admin/review/queue", { headers: { cookie: "walao_op=" } })).status,
     401,
   );
+});
+
+// Ticket 31 (§18-34): the two shapes the Today and Groups screens act on. Both
+// are data the API already had and did not say out loud — the screens would
+// otherwise have to guess them back, and a guess is a wrong write.
+
+test("a Brief item locates itself in its Summary, so the Brief can act on what it shows", async () => {
+  const userId = await h.seedUser("brief-1");
+  const sessionId = await h.seedSession(userId, "sess-brief-1");
+  const g1 = await h.seedGroup(sessionId, "b1@g.us");
+  const g2 = await h.seedGroup(sessionId, "b2@g.us");
+  await h.seedSummary(userId, g1, {
+    highlights: [{ text: "quiet morning", source_message_ids: [] }],
+    action_items: [
+      { text: "Pay vendor", source_message_ids: [], owner: null, due_at: null, confidence: 1 },
+    ],
+  });
+  // The same item from a second Group: the Brief merges the text and keeps both
+  // coordinates, so marking it done marks it done everywhere it came from.
+  await h.seedSummary(userId, g2, {
+    action_items: [
+      { text: "Pay vendor", source_message_ids: [], owner: null, due_at: null, confidence: 1 },
+    ],
+  });
+
+  const brief = (await h.api("brief-1", "GET", "/v1/briefs/today")).body as any;
+  const item = brief.needs_action.find((i: any) => i.text === "Pay vendor");
+  assert.equal(item.sources.length, 2);
+  for (const s of item.sources) {
+    assert.equal(s.section, "action_items");
+    assert.equal(s.item_index, 0); // its own index within its own section
+  }
+  // The index is the section's, not the payload's: "quiet morning" is
+  // highlights[0] even though an action item was stored beside it.
+  const note = brief.worth_noting.find((i: any) => i.text === "quiet morning").sources[0];
+  assert.equal(note.section, "highlights");
+  assert.equal(note.item_index, 0);
+
+  // What the Brief hands over is exactly what the state route accepts.
+  const s = item.sources[0];
+  assert.equal(
+    (
+      await h.api(
+        "brief-1",
+        "PUT",
+        `/v1/summaries/${s.summary_id}/items/${s.section}/${s.item_index}/state`,
+        { state: "complete" },
+      )
+    ).status,
+    200,
+  );
+  const after = (await h.api("brief-1", "GET", "/v1/summaries")).body as any;
+  const stored = after.summaries.find((x: any) => x.id === s.summary_id).states;
+  assert.deepEqual(stored, [{ section: "action_items", item_index: 0, state: "complete" }]);
+});
+
+test("the Groups list carries each Group's schedule and which Groups the cap has blocked", async () => {
+  const userId = await h.seedUser("grp-1");
+  const sessionId = await h.seedSession(userId, "sess-grp-1");
+  const ids = [];
+  for (let i = 0; i < 4; i++) ids.push(await h.seedGroup(sessionId, `cap${i}@g.us`, false));
+  await h.pool.query(`UPDATE users SET plan = 'pro' WHERE id = $1`, [userId]);
+
+  // Enabled in order, so the cap has an unambiguous oldest-first ranking.
+  for (const id of ids) {
+    assert.equal(
+      (await h.api("grp-1", "POST", `/v1/groups/${id}/enable`, { attestation_version: VERSION }))
+        .status,
+      200,
+    );
+  }
+  await h.api("grp-1", "PUT", `/v1/groups/${ids[0]}/schedule`, {
+    local_time: "18:30",
+    timezone: "Asia/Kuala_Lumpur",
+    language: "ms",
+  });
+
+  const onPro = (await h.api("grp-1", "GET", "/v1/groups")).body as any;
+  assert.deepEqual(
+    onPro.groups[0].schedule,
+    { local_time: "18:30", timezone: "Asia/Kuala_Lumpur", language: "ms" },
+    "the screen shows the schedule it is editing, not an empty form",
+  );
+  assert.equal(onPro.groups[1].schedule, null);
+  assert.ok(!onPro.groups.some((g: any) => g.blocked), "four Groups sit inside Pro's cap");
+
+  // Cancelling to Free (cap 3) blocks the newest enabled Group and only that one
+  // — the same ranking processingBlock uses, so the badge cannot disagree with
+  // what is actually being read.
+  assert.equal((await h.api("grp-1", "POST", "/v1/plan/cancel")).status, 200);
+  const onFree = (await h.api("grp-1", "GET", "/v1/groups")).body as any;
+  assert.deepEqual(
+    onFree.groups.map((g: any) => g.blocked),
+    [false, false, false, true],
+  );
+
+  // Disabled is not blocked: nothing is being read either way, and saying
+  // "blocked" about an off Group would send the merchant to the wrong fix.
+  assert.equal((await h.api("grp-1", "POST", `/v1/groups/${ids[3]}/disable`)).status, 200);
+  const off = (await h.api("grp-1", "GET", "/v1/groups")).body as any;
+  assert.equal(off.groups[3].blocked, false);
+  assert.equal(off.groups[3].enabled, false);
 });

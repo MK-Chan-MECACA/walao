@@ -21,19 +21,42 @@ export type GroupView = {
   external_jid: string;
   name: string | null;
   enabled: boolean;
+  // Enabled but past the Plan's cap, so nothing from it is being read. The
+  // rank test mirrors processingBlock's over_group_cap exactly (block.ts:76):
+  // oldest enabled Groups keep working, the ones enabled past the cap do not.
+  blocked: boolean;
+  schedule: { local_time: string; timezone: string; language: string } | null;
 };
 
 // Groups are tenant-scoped through the session's owning user.
 export async function listGroups(pool: pg.Pool, userId: string): Promise<GroupView[]> {
-  const { rows } = await pool.query(
-    `SELECT g.id, g.external_jid, g.name, g.enabled
-     FROM groups g
-     JOIN whatsapp_sessions s ON s.id = g.session_id
-     WHERE s.user_id = $1
-     ORDER BY g.created_at`,
-    [userId],
-  );
-  return rows;
+  const [{ rows }, plan] = await Promise.all([
+    pool.query(
+      `SELECT g.id, g.external_jid, g.name, g.enabled,
+              sc.local_time, sc.timezone, sc.language,
+              (SELECT count(*)::int FROM groups o
+                 JOIN whatsapp_sessions os ON os.id = o.session_id
+                WHERE os.user_id = $1 AND o.enabled AND o.enabled_at < g.enabled_at)
+                AS enabled_before
+       FROM groups g
+       JOIN whatsapp_sessions s ON s.id = g.session_id
+       LEFT JOIN summary_schedules sc ON sc.group_id = g.id
+       WHERE s.user_id = $1
+       ORDER BY g.created_at`,
+      [userId],
+    ),
+    getPlan(pool, userId),
+  ]);
+  return rows.map((r) => ({
+    id: r.id,
+    external_jid: r.external_jid,
+    name: r.name,
+    enabled: r.enabled,
+    blocked: r.enabled && r.enabled_before >= PLANS[plan].max_groups,
+    schedule: r.local_time
+      ? { local_time: r.local_time, timezone: r.timezone, language: r.language }
+      : null,
+  }));
 }
 
 export type ToggleResult = "ok" | "not_found" | "attestation_required" | "plan_limit";

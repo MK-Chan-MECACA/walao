@@ -2,11 +2,16 @@ import type pg from "pg";
 import type { SummaryPayload } from "./summarize.ts";
 import { jumpUrl } from "./surfaces.ts";
 
+// section/item_index locate the item inside its Summary, so the Brief can act
+// on what it shows: the state and confirm routes are keyed on exactly this pair
+// and the app would otherwise have to guess it back by matching text.
 export type BriefSource = {
   summary_id: string;
   group_id: string;
   group_name: string | null;
   jump_url: string;
+  section: keyof SummaryPayload;
+  item_index: number;
   source_message_ids: string[];
 };
 
@@ -59,7 +64,7 @@ export async function buildTodayBrief(pool: pg.Pool, userId: string): Promise<To
   for (const r of rows) {
     const payload = r.payload as SummaryPayload;
     for (const [section, bucket] of BUCKETS) {
-      for (const it of payload[section] ?? []) {
+      for (const [index, it] of (payload[section] ?? []).entries()) {
         const key = `${bucket}\n${it.text.trim().toLowerCase()}`;
         let item = merged.get(key);
         if (!item) {
@@ -72,6 +77,8 @@ export async function buildTodayBrief(pool: pg.Pool, userId: string): Promise<To
           group_id: r.group_id as string,
           group_name: r.group_name as string | null,
           jump_url: jumpUrl(r.external_jid as string),
+          section,
+          item_index: index,
           source_message_ids: it.source_message_ids,
         });
       }
