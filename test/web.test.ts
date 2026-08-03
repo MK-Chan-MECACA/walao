@@ -185,6 +185,7 @@ test("the app's own assets are served with the content types a browser needs", a
     ["/lists", /^text\/html/],
     ["/ask", /^text\/html/],
     ["/settings", /^text\/html/],
+    ["/ops", /^text\/html/],
     ["/app.css", /^text\/css/],
     ["/api.js", /^text\/javascript/],
     ["/layout.js", /^text\/javascript/],

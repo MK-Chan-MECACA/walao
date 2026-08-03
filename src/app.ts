@@ -152,7 +152,12 @@ export function createApp(deps: {
         return;
       }
 
-      // Halt switch (ticket 14).
+      // Halt switch (ticket 14). §58: the console shows the current state, so
+      // the switch is readable without being flipped to find out.
+      if (req.method === "GET" && url.pathname === "/admin/halt") {
+        send(res, 200, { halted: await isHalted(pool) });
+        return;
+      }
       if (req.method === "POST" && (url.pathname === "/admin/halt" || url.pathname === "/admin/resume")) {
         const halted = url.pathname === "/admin/halt";
         await setHalted(pool, halted);

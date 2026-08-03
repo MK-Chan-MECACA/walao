@@ -58,6 +58,18 @@ test("halt endpoint requires the operator secret", async () => {
   assert.equal((res.body as { halted: boolean }).halted, false); // state untouched
 });
 
+test("the console reads the halt state without flipping it (§58)", async () => {
+  const read = async () => {
+    const res = await h.op("GET", "/admin/halt", undefined, OPERATOR_SECRET);
+    assert.equal(res.status, 200);
+    return (await res.json()) as { halted: boolean };
+  };
+  assert.equal((await read()).halted, false);
+  await opPost("/admin/halt", OPERATOR_SECRET);
+  assert.equal((await read()).halted, true);
+  assert.equal((await h.op("GET", "/admin/halt", undefined, "wrong")).status, 401);
+});
+
 test("halt stops all gateway activity: webhooks refused, sends and pairing blocked", async () => {
   const userId = await h.seedUser("op1");
   const sessionId = await h.seedSession(userId, "sess-op1");

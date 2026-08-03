@@ -31,7 +31,7 @@ export async function api(method, path, body) {
   // §5: one live token per Account, so a 401 means the session ended somewhere
   // else. Every page treats it the same way: back to the login screen with a
   // line saying why, rather than a screenful of failed panels.
-  if (res.status === 401 && !onAuthPage()) {
+  if (res.status === 401 && !ownsIts401()) {
     location.replace("/?expired=1");
     throw new ApiError("session_ended", 401, data);
   }
@@ -39,8 +39,10 @@ export async function api(method, path, body) {
   return data;
 }
 
-function onAuthPage() {
-  return location.pathname === "/" || location.pathname === "/index.html";
+// The auth screen is already the destination, and /ops runs on the operator
+// cookie, not an Account session — sending it to the login form would be a lie.
+function ownsIts401() {
+  return ["/", "/index.html", "/ops"].includes(location.pathname);
 }
 
 // §7: a failure says what failed in words. Unknown codes fall back to the code
@@ -64,6 +66,8 @@ const WORDING = {
   invalid_retention_days: "Retention has to be a whole number of days between 1 and 30.",
   invalid_opt_in: "That setting takes yes or no.",
   authorization_required: "Read and affirm the Tier 1 wording before authorising it.",
+  invalid_plan: "That isn't a Plan. Pick free or pro.",
+  invalid_review: "A review needs a reviewer and its verdict filled in.",
   not_found: "That's gone — reload the page.",
   bad_json: "The app sent something the server couldn't read. Reload and retry.",
   unauthorized: "You're not signed in.",
