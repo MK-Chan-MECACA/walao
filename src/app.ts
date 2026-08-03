@@ -48,6 +48,7 @@ import {
   setQualityReviewOptIn,
 } from "./quality.ts";
 import { cancelPlan, getUsage } from "./billing.ts";
+import { accountMetadata, setPlan } from "./operator.ts";
 import { login, signup, verify, type SendCode } from "./accounts.ts";
 import { hashToken } from "./crypto.ts";
 import { timingSafeEqual } from "node:crypto";
@@ -148,6 +149,38 @@ export function createApp(deps: {
           return;
         }
         send(res, 201, result);
+        return;
+      }
+
+      // Operator console (ticket 28, spec §105, §109). Metadata only.
+      const account = url.pathname.match(/^\/admin\/accounts\/([0-9a-f-]{36})$/);
+      if (req.method === "GET" && account) {
+        const meta = await accountMetadata(pool, account[1]);
+        if (!meta) {
+          send(res, 404, { error: "not_found" });
+          return;
+        }
+        send(res, 200, meta);
+        return;
+      }
+
+      const accountPlan = url.pathname.match(/^\/admin\/accounts\/([0-9a-f-]{36})\/plan$/);
+      if (req.method === "PUT" && accountPlan) {
+        const body = await readJsonBody(req);
+        if (body === undefined) {
+          send(res, 400, { error: "bad_json" });
+          return;
+        }
+        const result = await setPlan(pool, accountPlan[1], (body as Record<string, unknown>).plan);
+        if (result === "invalid") {
+          send(res, 400, { error: "invalid_plan" });
+          return;
+        }
+        if (result === "not_found") {
+          send(res, 404, { error: "not_found" });
+          return;
+        }
+        send(res, 200, { plan: result });
         return;
       }
 
