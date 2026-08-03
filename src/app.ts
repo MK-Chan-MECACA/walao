@@ -4,7 +4,7 @@ import type { GatewayPort } from "./gateway/port.ts";
 import type { Config } from "./config.ts";
 import { ingestWebhook } from "./ingest.ts";
 import { drainQueue } from "./consumer.ts";
-import { authenticate, listMessages } from "./api.ts";
+import { authenticate, listMessages, summarySources } from "./api.ts";
 import {
   DISCLOSURE_TEMPLATE,
   disableGroup,
@@ -49,9 +49,12 @@ import {
 } from "./quality.ts";
 import { cancelPlan, getUsage } from "./billing.ts";
 import { accountMetadata, setPlan } from "./operator.ts";
-import { login, signup, verify, type SendCode } from "./accounts.ts";
+import { login, logout, signup, verify, type SendCode } from "./accounts.ts";
 import { hashToken } from "./crypto.ts";
 import { timingSafeEqual } from "node:crypto";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 export type App = {
   handler: (req: IncomingMessage, res: ServerResponse) => void;
@@ -76,6 +79,14 @@ export function createApp(deps: {
     (async (email, code) => {
       console.log(`[walao] login code for ${email}: ${code}`);
     });
+
+  // Hashed so the compare is over fixed-length inputs, constant-time so a wrong
+  // secret leaks nothing about how wrong it was.
+  const operatorOk = (given: string): boolean =>
+    timingSafeEqual(
+      Buffer.from(hashToken(given)),
+      Buffer.from(hashToken(config.operatorSecret)),
+    );
 
   const handler = (req: IncomingMessage, res: ServerResponse): void => {
     void route(req, res).catch((err) => {
@@ -110,12 +121,33 @@ export function createApp(deps: {
     // Everything under /admin is operator-only. Authorized by a dedicated
     // secret, compared constant-time via hashes — not by user bearer tokens.
     if (url.pathname.startsWith("/admin/")) {
-      const given = header(req, "x-walao-operator-secret");
-      const ok = timingSafeEqual(
-        Buffer.from(hashToken(given)),
-        Buffer.from(hashToken(config.operatorSecret)),
-      );
-      if (!ok) {
+      // Ticket 29 (app spec §54-55): the console trades the secret for an
+      // httpOnly cookie once, so it never reaches page scripts or storage.
+      // This route is the one /admin/* path reachable without the credential.
+      if (url.pathname === "/admin/session") {
+        if (req.method === "DELETE") {
+          setCookie(req, res, "walao_op", "");
+          send(res, 200, { ok: true });
+          return;
+        }
+        if (req.method === "POST") {
+          const body = await readJsonBody(req);
+          if (body === undefined) {
+            send(res, 400, { error: "bad_json" });
+            return;
+          }
+          const secret = (body as Record<string, unknown>).secret;
+          if (typeof secret !== "string" || !operatorOk(secret)) {
+            send(res, 401, { error: "unauthorized" });
+            return;
+          }
+          setCookie(req, res, "walao_op", secret);
+          send(res, 200, { ok: true });
+          return;
+        }
+      }
+
+      if (!operatorOk(header(req, "x-walao-operator-secret") || (cookie(req, "walao_op") ?? ""))) {
         send(res, 401, { error: "unauthorized" });
         return;
       }
@@ -216,6 +248,10 @@ export function createApp(deps: {
           send(res, 400, { error: "invalid_code" });
           return;
         }
+        // The token is also handed to the browser as an httpOnly cookie (app
+        // spec §3): the app never has to hold a credential page scripts can
+        // read. The body still carries it, so API clients are unaffected.
+        setCookie(req, res, "walao_session", result.token);
         send(res, 200, result);
         return;
       }
@@ -240,9 +276,19 @@ export function createApp(deps: {
 
     // Everything else under /v1 is authenticated and tenant-scoped.
     if (url.pathname.startsWith("/v1/")) {
-      const userId = await authenticate(pool, bearer(req));
+      // Header first, cookie second: every existing API client keeps working
+      // and the browser gets in without one. SameSite=Lax plus JSON-only
+      // mutating verbs is the CSRF posture — see the app spec's Further Notes.
+      const userId = await authenticate(pool, bearer(req) ?? cookie(req, "walao_session"));
       if (!userId) {
         send(res, 401, { error: "unauthorized" });
+        return;
+      }
+
+      if (req.method === "POST" && url.pathname === "/v1/logout") {
+        await logout(pool, userId);
+        setCookie(req, res, "walao_session", "");
+        send(res, 200, { ok: true });
         return;
       }
 
@@ -258,6 +304,19 @@ export function createApp(deps: {
 
       if (req.method === "GET" && url.pathname === "/v1/summaries") {
         send(res, 200, { summaries: await listSummaries(pool, userId) });
+        return;
+      }
+
+      // The evidence behind one Summary — what makes "every claim carries a
+      // source" checkable rather than asserted.
+      const sources = url.pathname.match(/^\/v1\/summaries\/([0-9a-f-]{36})\/sources$/);
+      if (req.method === "GET" && sources) {
+        const result = await summarySources(pool, config, userId, sources[1]);
+        if (!result) {
+          send(res, 404, { error: "not_found" });
+          return;
+        }
+        send(res, 200, { sources: result });
         return;
       }
 
@@ -689,10 +748,55 @@ export function createApp(deps: {
       }
     }
 
+    // The app itself, served same-origin from public/. Last branch, so it can
+    // never shadow an API route.
+    if ((req.method === "GET" || req.method === "HEAD") && (await serveStatic(res, url.pathname))) {
+      return;
+    }
+
     send(res, 404, { error: "not_found" });
   }
 
   return { handler, drain: () => drainQueue(pool, gateway, config) };
+}
+
+const PUBLIC_DIR = fileURLToPath(new URL("../public/", import.meta.url));
+
+const MIME: Record<string, string> = {
+  ".html": "text/html; charset=utf-8",
+  ".css": "text/css; charset=utf-8",
+  ".js": "text/javascript; charset=utf-8",
+  ".svg": "image/svg+xml",
+  ".png": "image/png",
+};
+
+// Static branch: `/` is the shell, an extensionless path is that page's .html,
+// anything else is served as itself. The resolve-then-prefix check is the
+// traversal guard and is deliberately not simplified away — a path that escapes
+// public/ is a 404, never a file read. Returns false to fall through to 404.
+async function serveStatic(res: ServerResponse, pathname: string): Promise<boolean> {
+  let rel: string;
+  try {
+    rel = decodeURIComponent(pathname);
+  } catch {
+    return false; // malformed percent-encoding is not a path
+  }
+  if (rel.includes("\0")) return false;
+  if (rel.endsWith("/")) rel += "index.html";
+  else if (!path.extname(rel)) rel += ".html";
+
+  const file = path.resolve(PUBLIC_DIR, "." + rel);
+  if (!file.startsWith(PUBLIC_DIR)) return false;
+
+  let body: Buffer;
+  try {
+    body = await readFile(file);
+  } catch {
+    return false; // missing, or a directory — both are 404
+  }
+  res.writeHead(200, { "content-type": MIME[path.extname(file)] ?? "application/octet-stream" });
+  res.end(body);
+  return true;
 }
 
 // undefined = malformed JSON (caller sends 400). Empty body parses as {}.
@@ -722,6 +826,26 @@ function bearer(req: IncomingMessage): string | null {
   const auth = header(req, "authorization");
   const m = auth.match(/^Bearer (.+)$/);
   return m ? m[1] : null;
+}
+
+function cookie(req: IncomingMessage, name: string): string | null {
+  for (const part of header(req, "cookie").split(";")) {
+    const eq = part.indexOf("=");
+    if (eq > 0 && part.slice(0, eq).trim() === name) return part.slice(eq + 1).trim() || null;
+  }
+  return null;
+}
+
+// httpOnly so page scripts cannot read the credential, SameSite=Lax so no
+// cross-site request carries it. Secure everywhere except a localhost Host:
+// dev over plain HTTP works, anything deployed gets the flag, and there is no
+// env var to misconfigure into a cookie the browser silently refuses to send.
+// An empty value clears the cookie.
+function setCookie(req: IncomingMessage, res: ServerResponse, name: string, value: string): void {
+  const host = header(req, "host").split(":")[0];
+  const secure = host === "localhost" || host === "127.0.0.1" ? "" : "; Secure";
+  const expiry = value === "" ? "; Max-Age=0" : "";
+  res.setHeader("set-cookie", `${name}=${value}; HttpOnly; SameSite=Lax; Path=/${secure}${expiry}`);
 }
 
 function send(res: ServerResponse, status: number, body: unknown): void {

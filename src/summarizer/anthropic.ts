@@ -96,18 +96,18 @@ export function userPrompt(messages: BatchMessage[]): string {
 // Pull the JSON payload out of a Messages API response. Kept separate from the
 // network call so the failure modes that actually bite (a refusal, a truncated
 // response, a non-text block) are testable without an API key.
-export function parseResponse(message: Anthropic.Message): unknown {
+export function parseResponse(message: Anthropic.Message, who = "summarizer"): unknown {
   if (message.stop_reason === "refusal") {
-    throw new Error(`summarizer refused: ${message.stop_details?.category ?? "unknown"}`);
+    throw new Error(`${who} refused: ${message.stop_details?.category ?? "unknown"}`);
   }
   if (message.stop_reason === "max_tokens") {
-    throw new Error("summarizer output truncated at max_tokens");
+    throw new Error(`${who} output truncated at max_tokens`);
   }
   const text = message.content
     .filter((b): b is Anthropic.TextBlock => b.type === "text")
     .map((b) => b.text)
     .join("");
-  if (text.trim() === "") throw new Error("summarizer returned no text block");
+  if (text.trim() === "") throw new Error(`${who} returned no text block`);
   return JSON.parse(text); // shape is not trusted — validateSummary owns that
 }
 

@@ -11,6 +11,8 @@ import { backfillGroupNames } from "./subscriptions.ts";
 import { evictIdleSessions } from "./connections.ts";
 import { LocalSummarizer } from "./summarizer/local.ts";
 import { AnthropicSummarizer } from "./summarizer/anthropic.ts";
+import { LocalAnswerer } from "./answerer/local.ts";
+import { AnthropicAnswerer, DEFAULT_ANSWERER_MODEL } from "./answerer/anthropic.ts";
 import type { AnswererPort } from "./ask.ts";
 
 // Real entrypoint. Boots the schema, serves the webhook + API, and drains the
@@ -33,11 +35,16 @@ async function main(): Promise<void> {
       ? `summarizer: ${config.summarizerModel}`
       : "summarizer: local echo (no ANTHROPIC_API_KEY — briefs will be verbatim, not condensed)",
   );
-  // ponytail: real model client wired when one is provisioned; FakeAnswerer
-  // covers ticket 11 (same status as WAAPI pairing/sendToSelf).
-  const answerer: AnswererPort = {
-    answer: () => Promise.reject(new Error("answerer not implemented")),
-  };
+  // Same conditional as the summarizer, same reason: Ask WALAO stays runnable
+  // locally without AI spend, and the port is identical either way.
+  const answerer: AnswererPort = config.anthropicApiKey
+    ? new AnthropicAnswerer(config.anthropicApiKey)
+    : new LocalAnswerer();
+  console.log(
+    config.anthropicApiKey
+      ? `answerer: ${DEFAULT_ANSWERER_MODEL}`
+      : "answerer: local echo (no ANTHROPIC_API_KEY — answers quote retrieval verbatim)",
+  );
   const app = createApp({ pool, gateway, answerer, config });
 
   const timer = setInterval(() => {

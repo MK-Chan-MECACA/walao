@@ -114,6 +114,13 @@ export async function verify(
   return { token, user_id: rows[0].id };
 }
 
+// Ticket 29 (app spec §4): ending a session kills the credential rather than
+// merely forgetting it — a token the browser dropped is still a token a
+// borrowed phone could replay. One live token per Account, so this is one row.
+export async function logout(pool: pg.Pool, userId: string): Promise<void> {
+  await pool.query(`UPDATE users SET api_token_sha256 = NULL WHERE id = $1`, [userId]);
+}
+
 // Ticket 24 (spec §71-72, §220-227, ADR-0002): message bodies belong to one
 // Account's key, not to the master key, so deleting the Account makes its rows
 // undecryptable everywhere they still exist — including a backup nobody can
