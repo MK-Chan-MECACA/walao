@@ -1,0 +1,263 @@
+/* One stylesheet, no framework, no build step. Mobile-first: the phone layout is
+   the base and there is no desktop breakpoint beyond a max-width. */
+
+:root {
+  --bg: #fbfbf9;
+  --card: #ffffff;
+  --ink: #1b1b1a;
+  --muted: #6b6b66;
+  --line: #e3e3dd;
+  --accent: #1f6f4a;
+  --accent-ink: #ffffff;
+  --warn-bg: #fdf3e3;
+  --warn-ink: #7a4c04;
+  --error: #a32020;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #141414;
+    --card: #1d1d1c;
+    --ink: #ececea;
+    --muted: #9a9a94;
+    --line: #333331;
+    --accent: #4fae7f;
+    --accent-ink: #10251b;
+    --warn-bg: #33280f;
+    --warn-ink: #e9c476;
+    --error: #ef8a8a;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0 1rem 3rem;
+  background: var(--bg);
+  color: var(--ink);
+  font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+main,
+header {
+  max-width: 34rem;
+  margin: 0 auto;
+}
+
+h1 {
+  font-size: 1.4rem;
+  margin: 1.5rem 0 0.25rem;
+}
+
+h2 {
+  font-size: 1.1rem;
+  margin: 1.5rem 0 0.5rem;
+}
+
+p {
+  margin: 0.5rem 0;
+}
+
+.muted {
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 1rem;
+  margin: 1rem auto;
+}
+
+/* Nav */
+nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  padding: 0.75rem 0 0;
+}
+
+nav a {
+  color: var(--muted);
+  text-decoration: none;
+  padding: 0.35rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.9rem;
+}
+
+nav a[aria-current="page"] {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+/* Status banner */
+.status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: baseline;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0.6rem 0.75rem;
+  margin: 0.75rem 0;
+  font-size: 0.9rem;
+}
+
+.status.blocked {
+  background: var(--warn-bg);
+  color: var(--warn-ink);
+  border-color: transparent;
+}
+
+.status .dot {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  background: var(--accent);
+  display: inline-block;
+}
+
+.status.blocked .dot {
+  background: currentColor;
+}
+
+/* Forms */
+label {
+  display: block;
+  font-size: 0.9rem;
+  margin: 0.75rem 0 0.25rem;
+}
+
+label.check {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+  font-size: 0.9rem;
+}
+
+input[type="email"],
+input[type="text"],
+input[type="password"] {
+  width: 100%;
+  padding: 0.6rem;
+  font: inherit;
+  color: inherit;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+button {
+  font: inherit;
+  padding: 0.6rem 0.9rem;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: var(--accent);
+  color: var(--accent-ink);
+  cursor: pointer;
+  margin-top: 0.75rem;
+}
+
+button[disabled] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+button.secondary {
+  background: transparent;
+  color: var(--ink);
+  border-color: var(--line);
+}
+
+button.link {
+  background: none;
+  border: none;
+  color: var(--muted);
+  padding: 0.4rem 0;
+  text-decoration: underline;
+}
+
+.tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.tabs button {
+  margin: 0;
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--line);
+}
+
+.tabs button[aria-pressed="true"] {
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-color: transparent;
+}
+
+.terms {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.6rem;
+  margin: 0.75rem 0;
+  font-size: 0.875rem;
+}
+
+.terms p {
+  max-height: 11rem;
+  overflow-y: auto;
+}
+
+.error {
+  color: var(--error);
+  font-size: 0.9rem;
+}
+
+.notice {
+  background: var(--warn-bg);
+  color: var(--warn-ink);
+  border-radius: 8px;
+  padding: 0.6rem 0.75rem;
+  font-size: 0.9rem;
+}
+
+code.code {
+  display: block;
+  font-size: 1.6rem;
+  letter-spacing: 0.2em;
+  text-align: center;
+  padding: 0.75rem;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  margin: 0.75rem 0;
+}
+
+ul.rows {
+  list-style: none;
+  margin: 0.5rem 0;
+  padding: 0;
+}
+
+ul.rows li {
+  border-top: 1px solid var(--line);
+  padding: 0.6rem 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+ul.rows li button {
+  margin: 0;
+}
+
+[hidden] {
+  display: none !important;
+}

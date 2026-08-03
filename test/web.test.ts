@@ -173,6 +173,22 @@ test("the shell is served from public/, and no path escapes it", async () => {
   assert.equal((await raw("GET", "/%zz")).status, 404);
 });
 
+test("the app's own assets are served with the content types a browser needs", async () => {
+  // Ticket 30: the shell is HTML plus two ES modules and one stylesheet. A
+  // wrong MIME on a module is a blank page, and nothing else would catch it.
+  for (const [path, type] of [
+    ["/", /^text\/html/],
+    ["/pair", /^text\/html/],
+    ["/app.css", /^text\/css/],
+    ["/api.js", /^text\/javascript/],
+    ["/layout.js", /^text\/javascript/],
+  ] as const) {
+    const res = await raw("GET", path);
+    assert.equal(res.status, 200, path);
+    assert.match(res.headers["content-type"] as string, type, path);
+  }
+});
+
 test("a Summary's sources are exactly the messages it cites, and only its owner's", async () => {
   const userId = await h.seedUser("src-1");
   const sessionId = await h.seedSession(userId, "sess-src-1");
