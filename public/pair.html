@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>WALAO — connection</title>
     <link rel="stylesheet" href="/app.css" />
+    <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
   </head>
   <body>
     <header id="chrome"></header>
@@ -29,11 +30,11 @@
       </section>
 
       <section class="card" id="code-box" hidden>
-        <h2>Your pairing code</h2>
-        <code class="code" id="pairing-code"></code>
+        <h2>Scan to pair</h2>
+        <div id="qr-code"></div>
         <p class="muted">
-          In WhatsApp on your phone: <strong>Settings → Linked devices → Link a device → Link with
-          phone number instead</strong>, then enter this code. It expires in a few minutes.
+          In WhatsApp on your phone: <strong>Settings → Linked devices → Link a device</strong>,
+          then scan this QR code. It expires in a few minutes.
         </p>
         <p id="waiting" class="muted">Waiting for WhatsApp to confirm…</p>
       </section>
@@ -80,7 +81,10 @@
           const res = await api("POST", "/v1/connections", {
             disclosure_version: disclosure?.version,
           });
-          $("pairing-code").textContent = res.pairing_code;
+          const qr = qrcode(0, "M");
+          qr.addData(res.pairing_code);
+          qr.make();
+          $("qr-code").innerHTML = qr.createImgTag(6);
           $("code-box").hidden = false;
           $("pair-box").hidden = true;
           // §14: the status arrives without a reload. Cheap poll — the gateway
@@ -144,7 +148,7 @@
         // the history. Disconnecting brings the pairing box back.
         const live = data.connections.some((c) => c.status === "connected");
         $("pair-box").hidden = live || poll !== null; // mid-pairing: the code stands alone
-        $("pairing-code").hidden = live;
+        $("qr-code").hidden = live;
         if (!live && poll === null) $("pair").disabled = !$("disclosure-ok").checked;
         if (live && poll) {
           clearInterval(poll);

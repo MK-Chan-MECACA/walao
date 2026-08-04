@@ -231,15 +231,14 @@ button.link {
   font-size: 0.9rem;
 }
 
-code.code {
-  display: block;
-  font-size: 1.6rem;
-  letter-spacing: 0.2em;
+#qr-code {
   text-align: center;
-  padding: 0.75rem;
-  border: 1px dashed var(--line);
-  border-radius: 8px;
-  margin: 0.75rem 0;
+  margin: 1rem 0;
+}
+
+#qr-code img {
+  max-width: 280px;
+  height: auto;
 }
 
 ul.rows {
