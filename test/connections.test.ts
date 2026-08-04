@@ -81,6 +81,28 @@ test("connection health reflects gateway state changes", async () => {
   assert.equal((await connections("tok"))[0].status, "re_pair_required");
 });
 
+test("pairing fills the Groups list from the gateway, disabled and ready to enable", async () => {
+  await h.seedUser("tok");
+  const created = await h.api("tok", "POST", "/v1/connections", {
+    disclosure_version: ONBOARDING_DISCLOSURE.version,
+  });
+  const extId = (created.body as { connection: Connection }).connection.external_session_id;
+  h.gateway.groupNames[extId] = [
+    { jid: "120363000000000001@g.us", name: "LEAD Marketing" },
+    { jid: "status@broadcast", name: null }, // not a Group: never listed
+  ];
+
+  await h.postWebhook({ kind: "status", session: extId, status: "connected" });
+
+  const { body } = await h.api("tok", "GET", "/v1/groups");
+  const groups = (body as { groups: Array<{ external_jid: string; name: string; enabled: boolean }> })
+    .groups;
+  assert.deepEqual(
+    groups.map((g) => [g.external_jid, g.name, g.enabled]),
+    [["120363000000000001@g.us", "LEAD Marketing", false]],
+  );
+});
+
 test("a session ingests nothing until the gateway reports it connected", async () => {
   await h.seedUser("tok");
   const created = await h.api("tok", "POST", "/v1/connections", {

@@ -151,6 +151,32 @@ async function setEnabled(
   }
 }
 
+// Seed the group list from the gateway when a session reaches 'connected'.
+// Message-driven discovery alone leaves a freshly paired Account with an empty
+// Groups screen until someone else happens to post — and a message the user
+// sends themselves is dropped as fromMe, so the list can stay empty for days.
+// Rows land disabled and unenabled, exactly like discovery: this is a list of
+// candidates to enable, not consent to process any of them. Metadata only.
+export async function seedGroups(
+  pool: pg.Pool,
+  gateway: GatewayPort,
+  sessionExternalId: string,
+): Promise<number> {
+  const groups = await gateway.listGroups(sessionExternalId);
+  let added = 0;
+  for (const g of groups) {
+    if (!g.jid.endsWith("@g.us")) continue; // status@broadcast and DMs are not Groups
+    const res = await pool.query(
+      `INSERT INTO groups (session_id, external_jid, name)
+       SELECT id, $2, $3 FROM whatsapp_sessions WHERE external_session_id = $1
+       ON CONFLICT (session_id, external_jid) DO NOTHING`,
+      [sessionExternalId, g.jid, g.name],
+    );
+    added += res.rowCount ?? 0;
+  }
+  return added;
+}
+
 // Backfill group titles. Discovery registers a group the first time a message
 // arrives, but providers may not carry the chat name on message events (WAAPI
 // does not), so those rows land unnamed. One gateway call per session that

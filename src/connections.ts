@@ -3,6 +3,7 @@ import type { GatewayPort, NormalizedStatus, SessionStatus } from "./gateway/por
 import { isHalted } from "./halt.ts";
 import { ATTESTATION_TEXTS, recordAttestation } from "./attestations.ts";
 import { grantTrial } from "./billing.ts";
+import { seedGroups } from "./subscriptions.ts";
 
 // Shown before pairing. POST /v1/connections must echo the current version
 // (same pattern as the group attestation) so pairing cannot start unseen, and
@@ -87,7 +88,12 @@ export async function applyGatewayStatus(
     [evt.sessionExternalId, evt.status],
     evt.status,
   );
-  if (evt.status === "connected") await startTrial(pool, gateway, evt.sessionExternalId);
+  if (evt.status === "connected") {
+    await startTrial(pool, gateway, evt.sessionExternalId);
+    // Best-effort: a gateway hiccup here must not undo the status flip. The next
+    // 'connected' (or the group's first message) fills the list instead.
+    await seedGroups(pool, gateway, evt.sessionExternalId).catch(() => {});
+  }
 }
 
 // Ticket 25 (spec §96-99, §232): reaching 'connected' is what "pairing
