@@ -32,6 +32,8 @@ export function testConfig(): Config {
     // Unused: every test drives the FakeGateway, never a real WAAPI instance.
     waapiBaseUrl: "http://127.0.0.1:1",
     waapiApiKey: "",
+    // Unused: test webhooks are not delivered through a real gateway.
+    webhookUrl: "http://127.0.0.1:1/webhooks/gateway",
     // Unused: every test drives FakeSummarizer, never a real model.
     anthropicApiKey: "",
     summarizerModel: "test-model",

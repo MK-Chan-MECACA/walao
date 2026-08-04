@@ -24,7 +24,7 @@ async function main(): Promise<void> {
   const pool = createPool(config.databaseUrl);
   await migrate(pool);
 
-  const gateway = new WaapiGateway(config.waapiBaseUrl, config.waapiApiKey);
+  const gateway = new WaapiGateway(config.waapiBaseUrl, config.waapiApiKey, config.webhookUrl, config.webhookSecret);
   // Real model when a key is present, deterministic echo when it isn't, so the
   // pipeline stays runnable locally without AI spend. Same port either way.
   const summarizer = config.anthropicApiKey

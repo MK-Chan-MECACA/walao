@@ -49,10 +49,14 @@ function toChatId(jid: string): string {
 export class WaapiGateway implements GatewayPort {
   readonly baseUrl: string;
   readonly apiKey: string;
+  readonly webhookUrl: string;
+  readonly webhookSecret: string;
 
-  constructor(baseUrl: string, apiKey: string) {
+  constructor(baseUrl: string, apiKey: string, webhookUrl: string, webhookSecret: string) {
     this.baseUrl = baseUrl;
     this.apiKey = apiKey;
+    this.webhookUrl = webhookUrl;
+    this.webhookSecret = webhookSecret;
   }
 
   parse(payload: unknown): GatewayEvent {
@@ -125,6 +129,13 @@ export class WaapiGateway implements GatewayPort {
     await this.call("POST", "/api/sessions", { name });
     await this.call("POST", `/api/sessions/${name}/start`, {});
 
+    // Register the webhook so the gateway delivers status and message events back
+    // to WALAO. Without this the session pairs but WALAO never learns about it.
+    // Events: message (ingest), session.status + state.pair + state.qr +
+    // state.loggedout (connection lifecycle). The call is fire-and-forget — a
+    // missed webhook registration is self-correcting on the next startPairing.
+    await this.registerWebhook(name);
+
     for (let i = 0; i < 30; i++) {
       const qr = asRecord(await this.call("GET", `/api/${name}/auth/qr`));
       if (typeof qr.code === "string" && qr.code.length > 0) {
@@ -133,6 +144,20 @@ export class WaapiGateway implements GatewayPort {
       await new Promise((r) => setTimeout(r, 1000));
     }
     throw new Error("waapi pairing: no QR after 30s");
+  }
+
+  private async registerWebhook(sessionName: string): Promise<void> {
+    try {
+      await this.call("POST", `/api/sessions/${sessionName}/webhooks`, {
+        url: this.webhookUrl,
+        secret: this.webhookSecret,
+        events: ["message", "session.status", "state.pair", "state.qr", "state.loggedout"],
+      });
+    } catch (err) {
+      // Webhook registration is best-effort. If it fails the session still pairs
+      // — status just won't flow until the next pairing or manual registration.
+      console.error(`waapi webhook registration failed for ${sessionName}:`, err);
+    }
   }
 
   async sendToSelf(externalSessionId: string, text: string): Promise<void> {
