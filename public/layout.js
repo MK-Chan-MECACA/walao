@@ -109,7 +109,7 @@ async function showSources(body, refs) {
 // page that needs the block reason does not fetch /v1/status twice.
 export async function mount(active) {
   const chrome = document.getElementById("chrome");
-  const nav = el("nav");
+  const nav = el("nav", {}, el("span", { class: "nav-brand", text: "WALAO" }));
   for (const [href, label] of NAV) {
     nav.append(el("a", { href, text: label, "aria-current": href === active ? "page" : null }));
   }

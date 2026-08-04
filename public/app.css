@@ -1,348 +1,707 @@
-/* One stylesheet, no framework, no build step. Mobile-first: the phone layout is
-   the base and there is no desktop breakpoint beyond a max-width. */
+/* Nocturne — the design system from the WALAO prototype, mapped onto the markup
+   the pages already build. One stylesheet, no framework, no build step. The
+   pages emit semantic elements (section.card, ul.rows li, button.secondary,
+   details/summary); everything below is those elements wearing the system's
+   tokens, so a visual change stays a change to this file. */
+
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
 
 :root {
-  --bg: #fbfbf9;
-  --card: #ffffff;
-  --ink: #1b1b1a;
-  --muted: #6b6b66;
-  --line: #e3e3dd;
-  --accent: #1f6f4a;
-  --accent-ink: #ffffff;
-  --warn-bg: #fdf3e3;
-  --warn-ink: #7a4c04;
-  --error: #a32020;
+  --color-bg: #161826;
+  --color-surface: #232532;
+  --color-text: #e9e9ed;
+  --color-divider: color-mix(in srgb, #e9e9ed 16%, transparent);
+  --color-chrome: #1b1d2c;
+
+  --color-neutral-100: #f3f5fe;
+  --color-neutral-800: #3f424d;
+  --color-neutral-900: #292b31;
+
+  /* The prototype rotates Nocturne's accent ramp to warm gold (OKLCH hue 83,
+     the triad partner of WhatsApp green) at 1.05x chroma. Same lightness steps,
+     so the documented contrast ratios survive the rotation. */
+  --color-accent: oklch(0.66 0.13125 83);
+  --color-accent-2: oklch(0.73 0.08925 83);
+  --color-accent-100: oklch(0.97 0.0189 83);
+  --color-accent-200: oklch(0.93 0.03675 83);
+  --color-accent-300: oklch(0.86 0.0735 83);
+  --color-accent-400: oklch(0.76 0.126 83);
+  --color-accent-500: oklch(0.66 0.13125 83);
+  --color-accent-600: oklch(0.56 0.12075 83);
+  --color-accent-700: oklch(0.46 0.09975 83);
+  --color-accent-800: oklch(0.37 0.07875 83);
+  --color-accent-900: oklch(0.29 0.05775 83);
+
+  /* Blocked / partial / destructive ground — one amber pair, used for the
+     status banner, the coverage-gap line, an over-cap row and the delete
+     warning, so "something is wrong here" reads the same everywhere. */
+  --warn-bg: oklch(0.3 0.045 82);
+  --warn-ink: oklch(0.86 0.1 82);
+  --error: oklch(0.75 0.15 25);
+
+  --font-heading: "Inter", system-ui, sans-serif;
+  --font-body: "Inter", system-ui, sans-serif;
+
+  --space-1: 2.8px;
+  --space-2: 5.6px;
+  --space-3: 8.4px;
+  --space-4: 11.2px;
+  --space-6: 16.8px;
+  --space-8: 22.4px;
+
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 14px;
+
+  --shadow-sm: 0 0 0 1px #3f424d;
+  --shadow-lg: 0 0 0 1px #9397ab, 0 16px 40px rgba(0, 0, 0, 0.65);
+
+  --sidebar: 224px;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #141414;
-    --card: #1d1d1c;
-    --ink: #ececea;
-    --muted: #9a9a94;
-    --line: #333331;
-    --accent: #4fae7f;
-    --accent-ink: #10251b;
-    --warn-bg: #33280f;
-    --warn-ink: #e9c476;
-    --error: #ef8a8a;
-  }
-}
-
-* {
+*,
+*::before,
+*::after {
   box-sizing: border-box;
 }
 
 body {
   margin: 0;
-  padding: 0 1rem 3rem;
-  background: var(--bg);
-  color: var(--ink);
-  font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  padding: 0;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font: 400 15px/1.55 var(--font-body);
 }
 
-main,
-header {
-  max-width: 34rem;
+body > header,
+body > main {
+  max-width: 1080px;
   margin: 0 auto;
+  padding: 0 var(--space-8);
 }
 
+body > header {
+  padding-top: var(--space-8);
+}
+
+body > main {
+  padding-top: var(--space-8);
+  padding-bottom: 67.2px;
+}
+
+/* Page title and its one-line meta, per screen. */
 h1 {
-  font-size: 1.4rem;
-  margin: 1.5rem 0 0.25rem;
+  font-family: var(--font-heading);
+  font-weight: 500;
+  font-size: 22px;
+  line-height: 1.12;
+  letter-spacing: -0.015em;
+  margin: 0 0 var(--space-1);
+}
+
+h1 + p {
+  margin: 0 0 var(--space-6);
+  font-size: 13px;
 }
 
 h2 {
-  font-size: 1.1rem;
-  margin: 1.5rem 0 0.5rem;
+  font-family: var(--font-heading);
+  font-weight: 500;
+  font-size: 17px;
+  line-height: 1.2;
+  margin: 0;
+}
+
+h3 {
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin: var(--space-2) 0 0;
 }
 
 p {
-  margin: 0.5rem 0;
+  margin: 0 0 var(--space-3);
+}
+
+a {
+  color: var(--color-accent);
+  text-decoration: none;
+  text-underline-offset: 3px;
+}
+
+a:hover {
+  color: var(--color-accent-400);
+  text-decoration: underline;
 }
 
 .muted {
-  color: var(--muted);
-  font-size: 0.875rem;
+  color: color-mix(in srgb, var(--color-text) 55%, transparent);
+  font-size: 13px;
 }
 
-.card {
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  padding: 1rem;
-  margin: 1rem auto;
+:focus {
+  outline: none;
 }
 
-/* Nav */
-nav {
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--color-accent) 30%, transparent);
+}
+
+/* Nav — a sticky rail on a wide screen, a tab bar on a narrow one. The nav is
+   position: fixed either way, so the gutter it occupies is padding on <body>
+   and only exists on the pages that render one (sign-in and /ops do not). */
+#chrome nav {
+  position: fixed;
+  z-index: 30;
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.25rem;
-  padding: 0.75rem 0 0;
+  background: var(--color-chrome);
 }
 
-nav a {
-  color: var(--muted);
+#chrome nav a {
+  color: inherit;
+  font-size: 14px;
+  padding: 7px var(--space-4);
+  border-radius: var(--radius-md);
+}
+
+#chrome nav a:hover {
+  color: var(--color-text);
   text-decoration: none;
-  padding: 0.35rem 0.6rem;
-  border-radius: 999px;
-  font-size: 0.9rem;
+  background: color-mix(in srgb, var(--color-text) 7%, transparent);
 }
 
-nav a[aria-current="page"] {
-  background: var(--accent);
-  color: var(--accent-ink);
+#chrome nav a[aria-current="page"] {
+  color: var(--color-accent);
 }
 
-/* Status banner */
+.nav-brand {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 17px;
+  letter-spacing: -0.02em;
+  padding: 0 var(--space-4) var(--space-4);
+}
+
+@media (min-width: 860px) {
+  body:has(#chrome nav) {
+    padding-left: var(--sidebar);
+  }
+
+  #chrome nav {
+    inset: 0 auto 0 0;
+    width: var(--sidebar);
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-1);
+    padding: var(--space-8) var(--space-4);
+    overflow: auto;
+    box-shadow: inset -1px 0 0 var(--color-divider);
+  }
+}
+
+@media (max-width: 859px) {
+  body:has(#chrome nav) {
+    padding-bottom: 56px;
+  }
+
+  body > header,
+  body > main {
+    padding-inline: var(--space-6);
+  }
+
+  #chrome nav {
+    inset: auto 0 0 0;
+    gap: var(--space-1);
+    padding: var(--space-3) var(--space-2);
+    justify-content: space-between;
+    box-shadow: inset 0 1px 0 var(--color-divider);
+  }
+
+  #chrome nav a {
+    flex: 1 1 0;
+    text-align: center;
+    padding: 7px 2px;
+    font-size: 11.5px;
+  }
+
+  .nav-brand {
+    display: none;
+  }
+}
+
+/* Status banner — §6's one line, in the ok or the blocked ground. */
 .status {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
-  align-items: baseline;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 0.6rem 0.75rem;
-  margin: 0.75rem 0;
-  font-size: 0.9rem;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  margin: var(--space-6) 0 0;
+  font-size: 13px;
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
 }
 
 .status.blocked {
   background: var(--warn-bg);
   color: var(--warn-ink);
-  border-color: transparent;
+  box-shadow: none;
 }
 
 .status .dot {
-  width: 0.55rem;
-  height: 0.55rem;
+  width: 8px;
+  height: 8px;
+  flex: none;
   border-radius: 50%;
-  background: var(--accent);
-  display: inline-block;
+  background: var(--color-accent);
 }
 
 .status.blocked .dot {
   background: currentColor;
 }
 
+.status .muted {
+  margin-left: auto;
+  font-size: 12px;
+}
+
+.status.blocked a {
+  color: currentColor;
+  text-decoration: underline;
+}
+
+/* Cards */
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  background: var(--color-surface);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  padding: var(--space-6);
+  margin: 0 0 var(--space-6);
+}
+
+.card > p {
+  margin: 0;
+}
+
+/* A control that sits loose in a card, outside a form, hugs its content
+   instead of stretching to the card's width. */
+.card > button {
+  align-self: flex-start;
+}
+
+.card > :is(input, select) {
+  max-width: 22rem;
+}
+
+/* Buttons — plain <button> is the primary action, .secondary the quiet one,
+   .link the ghost. A .secondary that is a toggle fills in when it is on. */
+button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  font-family: var(--font-heading);
+  font-weight: 500;
+  font-size: 13px;
+  line-height: 1.2;
+  padding: var(--space-2) 10px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-accent);
+  background: transparent;
+  color: var(--color-accent);
+  margin: 0;
+}
+
+button:hover {
+  background: color-mix(in srgb, var(--color-accent) 12%, transparent);
+}
+
+button:active {
+  background: color-mix(in srgb, var(--color-accent) 22%, transparent);
+}
+
+button[disabled] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+button.secondary {
+  border-color: var(--color-divider);
+  color: var(--color-text);
+}
+
+button.secondary:hover {
+  background: color-mix(in srgb, var(--color-text) 7%, transparent);
+}
+
+button.secondary[aria-pressed="true"] {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+button.link {
+  border-color: transparent;
+  color: var(--color-accent);
+  padding-inline: var(--space-1);
+  font-size: 12.5px;
+}
+
+button.link:hover {
+  background: color-mix(in srgb, var(--color-accent) 10%, transparent);
+  text-decoration: none;
+}
+
 /* Forms */
 label {
   display: block;
-  font-size: 0.9rem;
-  margin: 0.75rem 0 0.25rem;
+  font-size: 12px;
+  margin: 0 0 5px;
+  color: color-mix(in srgb, var(--color-text) 70%, transparent);
 }
 
 label.check {
   display: flex;
-  gap: 0.5rem;
+  gap: var(--space-3);
   align-items: flex-start;
-  font-size: 0.9rem;
+  font-size: 13.5px;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+input[type="checkbox"] {
+  accent-color: var(--color-accent);
+  width: 16px;
+  height: 16px;
+  flex: none;
+  margin: 2px 0 0;
 }
 
 input[type="email"],
 input[type="text"],
 input[type="password"],
+input[type="number"],
 input[type="date"],
 input[type="time"],
+input[type="datetime-local"],
 select,
 textarea {
   width: 100%;
-  padding: 0.6rem;
+  min-height: 36px;
+  padding: 6px 10px;
   font: inherit;
-  color: inherit;
-  background: var(--bg);
-  border: 1px solid var(--line);
-  border-radius: 8px;
+  font-size: 14px;
+  color: var(--color-text);
+  caret-color: var(--color-accent);
+  background: var(--color-surface);
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-md);
 }
 
-button {
-  font: inherit;
-  padding: 0.6rem 0.9rem;
-  border-radius: 8px;
-  border: 1px solid transparent;
-  background: var(--accent);
-  color: var(--accent-ink);
-  cursor: pointer;
-  margin-top: 0.75rem;
+input:hover,
+select:hover,
+textarea:hover {
+  border-color: color-mix(in srgb, var(--color-text) 45%, transparent);
 }
 
-button[disabled] {
-  opacity: 0.5;
-  cursor: not-allowed;
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  border-color: var(--color-accent);
+  outline-offset: 0;
 }
 
-button.secondary {
-  background: transparent;
-  color: var(--ink);
-  border-color: var(--line);
+textarea {
+  min-height: 90px;
+  resize: vertical;
 }
 
-button.link {
-  background: none;
-  border: none;
-  color: var(--muted);
-  padding: 0.4rem 0;
-  text-decoration: underline;
+/* A field is label-above-control; the app builds them as sibling pairs. */
+form,
+.form {
+  display: grid;
+  gap: var(--space-3);
 }
 
-.tabs {
+form label,
+.form label {
+  margin-bottom: -4px;
+}
+
+form > button,
+.form > button {
+  justify-self: start;
+}
+
+form :is(input, select),
+.form :is(input, select) {
+  max-width: 22rem;
+}
+
+.filters {
   display: flex;
-  gap: 0.5rem;
-  margin-bottom: 0.5rem;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.filters label {
+  flex: 1 1 9rem;
+}
+
+/* Segmented control — sign-up / log in. */
+.tabs {
+  display: inline-flex;
+  align-self: flex-start;
+  overflow: hidden;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-md);
+  margin: 0 0 var(--space-2);
 }
 
 .tabs button {
   margin: 0;
+  border: 0;
+  border-radius: 0;
+  padding: 7px 12px;
   background: transparent;
-  color: var(--muted);
-  border: 1px solid var(--line);
+  color: var(--color-text);
+}
+
+.tabs button + button {
+  border-left: 1px solid var(--color-divider);
 }
 
 .tabs button[aria-pressed="true"] {
-  background: var(--accent);
-  color: var(--accent-ink);
-  border-color: transparent;
+  color: var(--color-accent);
+  box-shadow: inset 0 0 0 1px var(--color-accent);
 }
 
+/* Attestation and terms boxes — the wording is a bounded, scrollable block so
+   the affirmation under it stays on screen with it. */
 .terms {
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 0.6rem;
-  margin: 0.75rem 0;
-  font-size: 0.875rem;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  font-size: 13.5px;
+}
+
+.terms > strong {
+  font-weight: 500;
+}
+
+.terms > .muted {
+  font-size: 11px;
 }
 
 .terms p {
+  margin: var(--space-2) 0;
   max-height: 11rem;
   overflow-y: auto;
-}
-
-.error {
-  color: var(--error);
-  font-size: 0.9rem;
 }
 
 .notice {
   background: var(--warn-bg);
   color: var(--warn-ink);
-  border-radius: 8px;
-  padding: 0.6rem 0.75rem;
-  font-size: 0.9rem;
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+  font-size: 13px;
+  margin: 0 0 var(--space-6);
 }
 
-#qr-code {
-  text-align: center;
-  margin: 1rem 0;
+.error {
+  color: var(--error);
+  font-size: 13px;
+  margin: 0;
 }
 
-#qr-code img {
-  max-width: 280px;
-  height: auto;
-}
-
+/* Rows — Brief items, Group rows, history, caps. A row is a growing text
+   column, its actions beside it, and any disclosure on its own line below. */
 ul.rows {
   list-style: none;
-  margin: 0.5rem 0;
+  margin: 0;
   padding: 0;
 }
 
 ul.rows li {
-  border-top: 1px solid var(--line);
-  padding: 0.6rem 0;
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
-  align-items: baseline;
+  gap: var(--space-4);
+  align-items: flex-start;
   justify-content: space-between;
+  padding: var(--space-4) 0;
+  box-shadow: inset 0 1px 0 var(--color-divider);
 }
 
-ul.rows li button {
-  margin: 0;
-}
-
-/* Brief items, Group rows: a growing text column, actions beside it, and any
-   disclosure (<details>) wrapping to its own full-width line below. */
 ul.rows li .grow {
-  flex: 1 1 12rem;
+  flex: 1 1 15rem;
+  min-width: 0;
 }
 
 ul.rows li .grow p {
   margin: 0;
+  font-size: 14.5px;
+}
+
+ul.rows li strong {
+  font-weight: 500;
+  font-size: 14.5px;
 }
 
 ul.rows li > details {
   flex-basis: 100%;
 }
 
-.actions {
-  display: flex;
-  gap: 0.4rem;
-  flex-wrap: wrap;
-}
-
-summary {
-  cursor: pointer;
-  font-size: 0.875rem;
-  color: var(--muted);
-}
-
-.item.complete .grow p {
-  text-decoration: line-through;
-}
-
-.item.dismissed .grow {
-  opacity: 0.55;
+/* A Group row states what WALAO is doing with it on a second line — that
+   sentence is too long to trail the name. Rows that carry a short trailing
+   fact (a Summary's date, a connection's timestamp) keep it inline. */
+li:is(.enabled, .off, .blocked) .grow > .muted {
+  display: block;
+  font-size: 12.5px;
 }
 
 li.blocked {
   background: var(--warn-bg);
   color: var(--warn-ink);
+  padding-inline: var(--space-4);
+  margin-inline: calc(-1 * var(--space-4));
+  border-radius: var(--radius-md);
 }
 
-/* Group chips and the whatsapp:// jump link */
-.chips {
+li.blocked .muted {
+  color: inherit;
+  opacity: 0.75;
+}
+
+.actions {
   display: flex;
+  gap: var(--space-2);
   flex-wrap: wrap;
-  gap: 0.35rem;
-  margin-top: 0.35rem;
 }
 
-.chip {
-  font-size: 0.8rem;
-  color: var(--muted);
-  text-decoration: none;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  padding: 0.1rem 0.5rem;
+.item.complete .grow p {
+  text-decoration: line-through;
+  opacity: 0.55;
 }
 
-/* Inline citations and Summary bodies */
+.item.dismissed .grow {
+  opacity: 0.5;
+}
+
+/* Disclosures — a caret instead of the platform marker, so the row reads as
+   one line of type. */
+summary {
+  cursor: pointer;
+  list-style: none;
+  font-size: 12.5px;
+  color: color-mix(in srgb, var(--color-text) 55%, transparent);
+}
+
+summary::-webkit-details-marker {
+  display: none;
+}
+
+summary::before {
+  content: "› ";
+}
+
+details[open] > summary::before {
+  content: "⌄ ";
+}
+
+/* Citations — every quoted message sits behind the same accent-less rule, so a
+   claim and the line it came from are visibly different kinds of text. */
 .sources {
-  padding: 0.25rem 0 0.5rem;
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-3) 0 var(--space-1);
 }
 
 .source {
   display: flex;
   flex-direction: column;
-  font-size: 0.875rem;
-  margin: 0.4rem 0;
-  padding-left: 0.6rem;
-  border-left: 2px solid var(--line);
+  margin: 0;
+  font-size: 13px;
+  padding-left: var(--space-3);
+  border-left: 2px solid var(--color-divider);
 }
 
-.filters {
+.source .muted {
+  font-size: 11px;
+}
+
+/* Chips — a Group tag reads as a label, the WhatsApp jump as a link. */
+.chips {
   display: flex;
-  gap: 0.75rem;
   flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
 }
 
-.filters label {
-  flex: 1 1 8rem;
+.chip {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  padding: 3px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--color-accent);
+  color: var(--color-accent);
 }
 
-.form label {
-  margin-bottom: 0;
+.chip:hover {
+  text-decoration: none;
+  background: color-mix(in srgb, var(--color-accent) 12%, transparent);
+}
+
+.chips .chip {
+  border-color: transparent;
+  background: var(--color-neutral-800);
+  color: var(--color-neutral-100);
+}
+
+.chips .chip:hover {
+  background: var(--color-neutral-900);
+}
+
+/* Pairing QR — the code needs a light quiet zone to scan off a dark screen. */
+#qr-code {
+  align-self: flex-start;
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-neutral-100);
+}
+
+#qr-code img {
+  width: 196px;
+  height: 196px;
+}
+
+/* Sign-in is the one screen with no nav: a centred column with the wordmark. */
+main.auth {
+  max-width: 840px;
+  padding-top: 22.4px;
+}
+
+main.auth > h1 {
+  font-size: 32px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  text-align: center;
+  margin-top: var(--space-8);
+}
+
+main.auth > h1 + p {
+  text-align: center;
 }
 
 [hidden] {

@@ -114,7 +114,9 @@
         $("empty").hidden = false;
         const line = $("empty-line");
         const say = (text, href, label) =>
-          line.replaceChildren(el("span", { text }), href ? el("a", { href, text: label }) : null);
+          line.replaceChildren(
+            ...[el("span", { text }), href ? el("a", { href, text: label }) : null].filter(Boolean),
+          );
 
         const reason = status?.block?.reason;
         if (reason === "unpaired") return say("No WhatsApp is connected yet. ", "/pair", "Pair");
