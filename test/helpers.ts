@@ -22,8 +22,18 @@ export const WEBHOOK_SECRET = "test-secret";
 export const OPERATOR_SECRET = "test-operator-secret";
 
 export function testConfig(): Config {
+  // reset() TRUNCATEs every table, so pointing the suite at a development
+  // database silently destroys the account, the paired session and its groups.
+  // Refuse anything that is not obviously a throwaway.
+  const databaseUrl = process.env.DATABASE_URL as string;
+  if (!/_test(\?|$)/.test(databaseUrl ?? "")) {
+    throw new Error(
+      `refusing to run tests against ${databaseUrl} — the suite truncates every table. ` +
+        `Use a database whose name ends in _test (e.g. postgres://postgres@127.0.0.1:5432/walao_test).`,
+    );
+  }
   return {
-    databaseUrl: process.env.DATABASE_URL as string,
+    databaseUrl,
     webhookSecret: WEBHOOK_SECRET,
     operatorSecret: OPERATOR_SECRET,
     encKey: randomBytes(32),
