@@ -148,7 +148,7 @@ export class WaapiGateway implements GatewayPort {
 
   private async registerWebhook(sessionName: string): Promise<void> {
     try {
-      await this.call("POST", `/api/sessions/${sessionName}/webhooks`, {
+      await this.call("POST", `/api/${sessionName}/webhooks`, {
         url: this.webhookUrl,
         secret: this.webhookSecret,
         events: ["message", "session.status", "state.pair", "state.qr", "state.loggedout"],
