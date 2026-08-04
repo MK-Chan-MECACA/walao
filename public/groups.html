@@ -61,11 +61,24 @@
       await mount("/groups");
       load();
 
-      api("GET", "/v1/attestation-texts")
-        .then((texts) => {
+      // §28 still holds: enabling records its own Attestation, and a bumped
+      // version comes back unticked. What is restored is only that this Account
+      // already affirmed *this* wording — the box is a standing affirmation
+      // ("for every Group I enable"), so re-reading its own consent trail is
+      // what makes it survive a reload instead of leaving every Enable inert.
+      Promise.all([api("GET", "/v1/attestation-texts"), api("GET", "/v1/attestations")])
+        .then(([texts, { attestations }]) => {
           attestation = texts.group_responsibility;
           $("attestation-text").textContent = attestation.text;
           $("attestation-version").textContent = `version ${attestation.version}`;
+          if (
+            attestations.some(
+              (a) => a.kind === "group_responsibility" && a.version === attestation.version,
+            )
+          ) {
+            $("attestation-ok").checked = true;
+            syncEnables(); // load() may have already rendered its rows unticked
+          }
         })
         .catch((err) => {
           $("attestation-text").textContent = message(err);
@@ -91,9 +104,11 @@
         }
       };
 
-      $("attestation-ok").onchange = (e) => {
-        for (const b of document.querySelectorAll("button.enable")) b.disabled = !e.target.checked;
-      };
+      function syncEnables() {
+        const ok = $("attestation-ok").checked;
+        for (const b of document.querySelectorAll("button.enable")) b.disabled = !ok;
+      }
+      $("attestation-ok").onchange = syncEnables;
 
       function fail(err) {
         $("error").textContent = message(err);
