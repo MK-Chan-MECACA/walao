@@ -50,6 +50,7 @@ import {
 import { cancelPlan, getUsage } from "./billing.ts";
 import { accountMetadata, setPlan } from "./operator.ts";
 import { login, logout, signup, verify, type SendCode } from "./accounts.ts";
+import { resendSender } from "./mail.ts";
 import { hashToken } from "./crypto.ts";
 import { timingSafeEqual } from "node:crypto";
 import { readFile } from "node:fs/promises";
@@ -72,13 +73,15 @@ export function createApp(deps: {
   sendCode?: SendCode;
 }): App {
   const { pool, gateway, answerer, config } = deps;
-  // ponytail: no mail transport yet — the code goes to the log. Wire SMTP or a
-  // provider here when a real user has to receive one.
+  // Real mail when a Resend key is present, log line when it isn't, so the auth
+  // flow stays runnable locally with no mail spend. Tests inject their own.
   const sendCode: SendCode =
     deps.sendCode ??
-    (async (email, code) => {
-      console.log(`[walao] login code for ${email}: ${code}`);
-    });
+    (config.resendApiKey
+      ? resendSender(config.resendApiKey, config.mailFrom)
+      : async (email, code) => {
+          console.log(`[walao] login code for ${email}: ${code}`);
+        });
 
   // Hashed so the compare is over fixed-length inputs, constant-time so a wrong
   // secret leaks nothing about how wrong it was.

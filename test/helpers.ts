@@ -35,6 +35,9 @@ export function testConfig(): Config {
     // Unused: every test drives FakeSummarizer, never a real model.
     anthropicApiKey: "",
     summarizerModel: "test-model",
+    // Unused: the harness injects its own sendCode, so no mail is ever sent.
+    resendApiKey: "",
+    mailFrom: "WALAO <test@example.com>",
   };
 }
 

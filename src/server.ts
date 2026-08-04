@@ -45,6 +45,11 @@ async function main(): Promise<void> {
       ? `answerer: ${DEFAULT_ANSWERER_MODEL}`
       : "answerer: local echo (no ANTHROPIC_API_KEY — answers quote retrieval verbatim)",
   );
+  console.log(
+    config.resendApiKey
+      ? `mail: resend, from ${config.mailFrom}`
+      : "mail: log only (no RESEND_API_KEY — login codes print here, no email is sent)",
+  );
   const app = createApp({ pool, gateway, answerer, config });
 
   const timer = setInterval(() => {

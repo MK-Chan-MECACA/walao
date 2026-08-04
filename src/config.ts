@@ -14,6 +14,8 @@ export type Config = {
   waapiApiKey: string; // empty until a gateway is provisioned; adapter fails loud on use
   anthropicApiKey: string; // empty => LocalSummarizer echo stand-in, no AI calls
   summarizerModel: string;
+  resendApiKey: string; // empty => login codes go to the log, not to a mailbox
+  mailFrom: string;
 };
 
 function required(name: string): string {
@@ -42,5 +44,9 @@ export function loadConfig(): Config {
     // summarizer, so the pipeline stays runnable with no AI spend.
     anthropicApiKey: process.env.ANTHROPIC_API_KEY ?? "",
     summarizerModel: process.env.WALAO_SUMMARIZER_MODEL ?? DEFAULT_MODEL,
+    // Same pattern again: without a key the code goes to the log, so dev and
+    // tests run with no mail spend and no deliverability setup.
+    resendApiKey: process.env.RESEND_API_KEY ?? "",
+    mailFrom: process.env.WALAO_MAIL_FROM ?? "WALAO <onboarding@resend.dev>",
   };
 }
