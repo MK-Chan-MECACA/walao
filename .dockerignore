@@ -1,0 +1,11 @@
+node_modules/
+.git/
+.env
+*.log
+.DS_Store
+.pgtmp/
+.scratch/
+.claude/
+.agents/
+test/
+docs/
