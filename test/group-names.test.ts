@@ -42,11 +42,37 @@ describe("group name backfill", () => {
     assert.equal(await backfillGroupNames(h.pool, h.gateway), 0);
   });
 
-  it("leaves the group unnamed when the gateway does not know it", async () => {
+  // A jid the gateway does not return can never be named, so it must stop
+  // being asked about: an unnamed row left NULL kept this session in the
+  // backfill query forever, and WhatsApp answers that with 429 rate-overlimit
+  // and closes the stream. One pass, then the session is done.
+  it("settles a group the gateway does not know on its jid instead of re-asking", async () => {
     const userId = await h.seedUser("tok");
     const sessionId = await h.seedSession(userId, "sess-1");
     const g = await h.seedGroup(sessionId, "ccc@g.us");
     h.gateway.groupNames["sess-1"] = [{ jid: "other@g.us", name: "Someone Else" }];
+
+    assert.equal(await backfillGroupNames(h.pool, h.gateway), 0);
+    assert.equal(await nameOf(g), "ccc@g.us");
+
+    // The pass converged: nothing is unnamed, so the gateway is never called
+    // again for this session.
+    let calls = 0;
+    h.gateway.listGroups = () => {
+      calls += 1;
+      return Promise.resolve([]);
+    };
+    assert.equal(await backfillGroupNames(h.pool, h.gateway), 0);
+    assert.equal(calls, 0);
+  });
+
+  // An empty list is ambiguous — a session still warming up looks exactly like
+  // one that left every group. Do not settle on it; wait for a real answer.
+  it("does not settle anything when the gateway returns no groups at all", async () => {
+    const userId = await h.seedUser("tok");
+    const sessionId = await h.seedSession(userId, "sess-1");
+    const g = await h.seedGroup(sessionId, "fff@g.us");
+    h.gateway.groupNames["sess-1"] = [];
 
     assert.equal(await backfillGroupNames(h.pool, h.gateway), 0);
     assert.equal(await nameOf(g), null);

@@ -212,6 +212,26 @@ export async function backfillGroupNames(pool: pg.Pool, gateway: GatewayPort): P
       );
       named += res.rowCount ?? 0;
     }
+
+    // Converge. A jid the gateway does not return (left group, or a chat it no
+    // longer knows) would stay NULL forever, and this session would re-query
+    // /groups on every pass — which is what WhatsApp answers with 429
+    // rate-overlimit and then closes the stream over. Stamp the leftovers with
+    // their jid so the pass has an end: the UI already renders
+    // `name ?? external_jid`, so nothing looks different. Skipped when the
+    // gateway returned nothing at all — an empty list is more likely a session
+    // still warming up than proof every group is gone.
+    if (groups.length > 0) {
+      await pool.query(
+        `UPDATE groups SET name = groups.external_jid
+         FROM whatsapp_sessions s
+         WHERE groups.session_id = s.id
+           AND s.external_session_id = $1
+           AND groups.name IS NULL
+           AND groups.external_jid <> ALL($2::text[])`,
+        [sessionExternalId, groups.map((g) => g.jid)],
+      );
+    }
   }
   return named;
 }

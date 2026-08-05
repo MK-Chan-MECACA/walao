@@ -72,6 +72,9 @@ async function main(): Promise<void> {
   // Group titles are not on the message webhook, so unnamed groups are filled
   // from the gateway. Its own timer, not the 1s tick: this is a network call
   // and a name that cannot be resolved must not be retried every second.
+  // 10 minutes, not 1: WhatsApp rate-limits group-metadata queries hard (429
+  // rate-overlimit, then it closes the stream and the session drops), and a
+  // group title nobody has seen yet can wait.
   const nameTimer = setInterval(() => {
     backfillGroupNames(pool, gateway).catch((err) =>
       console.error("group name backfill error", err),
@@ -79,7 +82,7 @@ async function main(): Promise<void> {
     // ponytail: eviction rides the 60s timer — a 14-day threshold does not care
     // about the minute. Move it to a daily cron if the scan ever costs anything.
     evictIdleSessions(pool).catch((err) => console.error("session eviction error", err));
-  }, 60_000);
+  }, 600_000);
   nameTimer.unref();
 
   createServer(app.handler).listen(config.port, () => {
