@@ -8,8 +8,8 @@ import { LocalSummarizer } from "../src/summarizer/local.ts";
 // produce an uncited claim, which is what lets it stand in for a real model.
 test("local summarizer emits only verbatim, self-cited claims", async () => {
   const messages = [
-    { id: "11111111-1111-1111-1111-111111111111", sender_ref: "a@c.us", sent_at: "2026-07-31T00:00:00.000Z", text: "lunch at 1pm" },
-    { id: "22222222-2222-2222-2222-222222222222", sender_ref: null, sent_at: "2026-07-31T00:01:00.000Z", text: "bring the invoice" },
+    { id: "11111111-1111-1111-1111-111111111111", sender_ref: "a@c.us", sender_name: null, sent_at: "2026-07-31T00:00:00.000Z", text: "lunch at 1pm" },
+    { id: "22222222-2222-2222-2222-222222222222", sender_ref: null, sender_name: null, sent_at: "2026-07-31T00:01:00.000Z", text: "bring the invoice" },
   ];
 
   const res = await new LocalSummarizer().summarize({ language: "en", messages });

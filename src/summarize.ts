@@ -13,6 +13,7 @@ import { processingBlock } from "./block.ts";
 export type BatchMessage = {
   id: string;
   sender_ref: string | null;
+  sender_name: string | null; // display name; preferred over sender_ref when present
   sent_at: string; // ISO
   text: string;
 };
@@ -176,7 +177,7 @@ export async function processSummaryJobs(
       }
 
       const msgs = await client.query(
-        `SELECT id, sender_ref, sent_at, body_ciphertext FROM messages
+        `SELECT id, sender_ref, sender_name, sent_at, body_ciphertext FROM messages
          WHERE group_id = $1 AND sent_at > $2 AND sent_at <= $3 AND NOT from_me
          ORDER BY sent_at`,
         [job.group_id, job.window_start, job.window_end],
@@ -186,6 +187,7 @@ export async function processSummaryJobs(
         .map((m) => ({
           id: m.id as string,
           sender_ref: m.sender_ref as string | null,
+          sender_name: m.sender_name as string | null,
           sent_at: (m.sent_at as Date).toISOString(),
           text: decrypt(m.body_ciphertext, key).trim(),
         }))

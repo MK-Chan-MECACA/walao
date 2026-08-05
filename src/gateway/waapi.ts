@@ -78,6 +78,10 @@ export class WaapiGateway implements GatewayPort {
         groupName: null,
         externalMessageId: str(msg.id, "id"),
         senderRef: typeof msg.sender === "string" ? msg.sender : null,
+        // LID senders ("...@lid") carry no number to resolve, so push_name is
+        // the only human-readable thing on the event.
+        senderName:
+          typeof msg.push_name === "string" && msg.push_name.length > 0 ? msg.push_name : null,
         text: typeof msg.body === "string" ? msg.body : "",
         sentAt: new Date(ts * 1000),
         fromMe: msg.from_me === true,

@@ -9,6 +9,7 @@ export type NormalizedEvent = {
   groupName: string | null;
   externalMessageId: string; // idempotency key together with the session
   senderRef: string | null;
+  senderName: string | null; // sender's display name if the provider carries one
   text: string;
   sentAt: Date;
   fromMe: boolean; // system echo; excluded from processing by later tickets

@@ -163,7 +163,7 @@ Every route below is shipped and unchanged unless marked **new**.
 
 ### Citations
 
-- **New** `GET /v1/summaries/:id/sources` returns the messages that Summary's items cite — `{ id, group_id, sender_ref, sent_at, text }` — tenant-scoped, decrypted with the Account key, restricted to `source_message_ids` present in that Summary's payload. It never returns the Account's wider history.
+- **New** `GET /v1/summaries/:id/sources` returns the messages that Summary's items cite — `{ id, group_id, sender_ref, sender_name, sent_at, text }` — tenant-scoped, decrypted with the Account key, restricted to `source_message_ids` present in that Summary's payload. It never returns the Account's wider history.
 - The app expands an Item in place to show its evidence. This is the mechanism that makes "every claim carries a source" a fact the merchant can check.
 - `jump_url` already exists (`surfaces.ts:19`, `whatsapp://chat?jid=…`) and is rendered as an "Open in WhatsApp" affordance. WhatsApp publishes no guaranteed deep link to a group or a message, so the scheme is best-effort: inline sources are the reliable path and the link is the bonus. If a client that ignores the scheme becomes common, the existing `ponytail:` note in `surfaces.ts` records the upgrade path.
 

@@ -93,7 +93,10 @@ async function showSources(body, refs) {
         el(
           "p",
           { class: "source" },
-          el("span", { class: "muted", text: `${m.sender_ref ?? "unknown"} · ${fmtDate(m.sent_at)}` }),
+          el("span", {
+            class: "muted",
+            text: `${m.sender_name ?? m.sender_ref ?? "unknown"} · ${fmtDate(m.sent_at)}`,
+          }),
           el("span", { text: m.text }),
         ),
       );

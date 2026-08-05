@@ -14,7 +14,7 @@ import type { Language } from "../scheduler.ts";
 // inside a delimiter, never in the system prompt, and this call has no tools —
 // injected instructions have nothing to reach.
 
-export const PROMPT_VERSION = "anthropic-v1";
+export const PROMPT_VERSION = "anthropic-v2";
 export const DEFAULT_MODEL = "claude-opus-5";
 
 const LANGUAGE_NAMES: Record<Language, string> = {
@@ -78,6 +78,7 @@ export function systemPrompt(language: Language): string {
     "- Every claim must cite at least one id from the batch in source_message_ids. A claim you cannot cite must be omitted, not guessed.",
     "- Never invent a name, date, owner, decision, or number that is not in the messages. If the batch does not say, leave the field null or the section empty.",
     "- A quiet batch is an empty summary. Do not pad sections to look useful.",
+    "- Each fact belongs in exactly one section. Pick the strongest: action_items > decisions > open_questions > dates > highlights > memory_candidates. Never restate the same fact in a second section, even in different words.",
     "- decisions are things the group settled. action_items are things someone is expected to do; owner is the person named in the messages or null, due_at is an ISO 8601 timestamp only if the messages state one, and confidence is 0..1.",
     "- memory_candidates are durable facts about the user or group worth remembering beyond today, not day-to-day chatter.",
     `- Write every text field in ${LANGUAGE_NAMES[language]}.`,
@@ -88,7 +89,7 @@ export function systemPrompt(language: Language): string {
 
 export function userPrompt(messages: BatchMessage[]): string {
   const lines = messages.map(
-    (m) => `id=${m.id} at=${m.sent_at} from=${m.sender_ref ?? "unknown"}\n${m.text}`,
+    (m) => `id=${m.id} at=${m.sent_at} from=${m.sender_name ?? m.sender_ref ?? "unknown"}\n${m.text}`,
   );
   return `<messages>\n${lines.join("\n\n")}\n</messages>`;
 }

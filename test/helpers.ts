@@ -78,6 +78,7 @@ export class FakeGateway implements GatewayPort {
       groupName: (p.chatName as string) ?? null,
       externalMessageId: String(p.id),
       senderRef: (p.from as string) ?? null,
+      senderName: (p.fromName as string) ?? null,
       text: typeof p.text === "string" ? p.text : "",
       sentAt: new Date(p.sentAt as string),
       fromMe: p.fromMe === true,

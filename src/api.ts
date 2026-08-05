@@ -9,6 +9,7 @@ export type ApiMessage = {
   group_id: string;
   external_id: string;
   sender_ref: string | null;
+  sender_name: string | null;
   sent_at: string;
   text: string;
 };
@@ -33,7 +34,7 @@ export async function listMessages(
   userId: string,
 ): Promise<ApiMessage[]> {
   const { rows } = await pool.query(
-    `SELECT id, group_id, external_id, sender_ref, sent_at, body_ciphertext
+    `SELECT id, group_id, external_id, sender_ref, sender_name, sent_at, body_ciphertext
      FROM messages
      WHERE user_id = $1
      ORDER BY sent_at`,
@@ -45,6 +46,7 @@ export async function listMessages(
     group_id: r.group_id,
     external_id: r.external_id,
     sender_ref: r.sender_ref,
+    sender_name: r.sender_name,
     sent_at: new Date(r.sent_at).toISOString(),
     text: decrypt(r.body_ciphertext, key),
   }));
@@ -72,7 +74,7 @@ export async function summarySources(
   if (ids.length === 0) return [];
 
   const msgs = await pool.query(
-    `SELECT id, group_id, sender_ref, sent_at, body_ciphertext
+    `SELECT id, group_id, sender_ref, sender_name, sent_at, body_ciphertext
      FROM messages
      WHERE user_id = $1 AND id = ANY($2::uuid[])
      ORDER BY sent_at`,
@@ -83,6 +85,7 @@ export async function summarySources(
     id: r.id,
     group_id: r.group_id,
     sender_ref: r.sender_ref,
+    sender_name: r.sender_name,
     sent_at: new Date(r.sent_at).toISOString(),
     text: decrypt(r.body_ciphertext, key),
   }));
