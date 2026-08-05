@@ -14,11 +14,14 @@ export type ApiMessage = {
 };
 
 // Resolve a bearer token to a user id, or null. Tokens are compared by hash.
+// F7: an expired token is no token — the check is in the same query as the
+// lookup so there is no path that reads one without the other.
 export async function authenticate(pool: pg.Pool, bearer: string | null): Promise<string | null> {
   if (!bearer) return null;
-  const { rows } = await pool.query(`SELECT id FROM users WHERE api_token_sha256 = $1`, [
-    hashToken(bearer),
-  ]);
+  const { rows } = await pool.query(
+    `SELECT id FROM users WHERE api_token_sha256 = $1 AND token_expires_at > now()`,
+    [hashToken(bearer)],
+  );
   return rows.length ? rows[0].id : null;
 }
 

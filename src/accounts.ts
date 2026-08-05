@@ -14,6 +14,9 @@ const CODE_TTL_MS = 15 * 60_000;
 // 31 unambiguous characters, 8 of them: ~40 bits. Enough that online guessing
 // inside the 15-minute window is not a threat, so no attempt counter is needed.
 const ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
+// F7: every token dies on its own eventually. Verifying mints a new one, so
+// signing in is the only renewal there is and a leaked token has a deadline.
+export const TOKEN_TTL_DAYS = 30;
 
 // Normalised at the boundary so "A@b.com" and "a@b.com" are one Account.
 export function normalizeEmail(raw: unknown): string | null {
@@ -104,12 +107,13 @@ export async function verify(
   await pool.query(
     `UPDATE users
      SET api_token_sha256 = $2,
+         token_expires_at = now() + $3::interval,
          email_verified_at = COALESCE(email_verified_at, now()),
          last_login_at = now(),
          login_code_sha256 = NULL,
          login_code_expires_at = NULL
      WHERE id = $1`,
-    [rows[0].id, hashToken(token)],
+    [rows[0].id, hashToken(token), `${TOKEN_TTL_DAYS} days`],
   );
   return { token, user_id: rows[0].id };
 }
@@ -118,7 +122,10 @@ export async function verify(
 // merely forgetting it — a token the browser dropped is still a token a
 // borrowed phone could replay. One live token per Account, so this is one row.
 export async function logout(pool: pg.Pool, userId: string): Promise<void> {
-  await pool.query(`UPDATE users SET api_token_sha256 = NULL WHERE id = $1`, [userId]);
+  await pool.query(
+    `UPDATE users SET api_token_sha256 = NULL, token_expires_at = NULL WHERE id = $1`,
+    [userId],
+  );
 }
 
 // Ticket 24 (spec §71-72, §220-227, ADR-0002): message bodies belong to one

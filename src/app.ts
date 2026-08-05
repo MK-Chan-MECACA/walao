@@ -49,10 +49,17 @@ import {
 } from "./quality.ts";
 import { cancelPlan, getUsage } from "./billing.ts";
 import { accountMetadata, setPlan } from "./operator.ts";
-import { login, logout, signup, verify, type SendCode } from "./accounts.ts";
+import { login, logout, normalizeEmail, signup, verify, type SendCode } from "./accounts.ts";
+import {
+  EMAIL_CODE_PER_EMAIL,
+  EMAIL_CODE_PER_IP,
+  VERIFY_PER_EMAIL,
+  VERIFY_PER_IP,
+  allowBoth,
+} from "./limits.ts";
 import { resendSender } from "./mail.ts";
 import { hashToken } from "./crypto.ts";
-import { timingSafeEqual } from "node:crypto";
+import { randomBytes, timingSafeEqual } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -101,6 +108,13 @@ export function createApp(deps: {
   async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const url = new URL(req.url ?? "/", "http://localhost");
 
+    // F6: the container's liveness probe. Deliberately says nothing — not the
+    // database's state, not a version — so it stays safe to leave unauthenticated.
+    if (req.method === "GET" && url.pathname === "/healthz") {
+      send(res, 200, { ok: true });
+      return;
+    }
+
     if (req.method === "POST" && url.pathname === "/webhooks/gateway") {
       // Halt switch (ticket 14): while halted the gateway ingress is refused
       // outright — nothing is parsed, verified, or written.
@@ -108,7 +122,13 @@ export function createApp(deps: {
         send(res, 503, null);
         return;
       }
-      const raw = await readRawBody(req);
+      // An oversized body is refused before a signature is ever computed —
+      // the HMAC would have to read all of it to say no (F4).
+      const raw = await readRawBody(req).catch(() => null);
+      if (raw === null) {
+        send(res, 400, null);
+        return;
+      }
       // WAAPI Gateway signs as `X-Webhook-Signature: sha256=<hex>`; the native
       // header stays accepted so existing senders keep working. Both are the
       // same HMAC-SHA256 over the raw body, so only the encoding differs.
@@ -129,6 +149,15 @@ export function createApp(deps: {
       // This route is the one /admin/* path reachable without the credential.
       if (url.pathname === "/admin/session") {
         if (req.method === "DELETE") {
+          // F3: signing out ends the session server-side. Clearing the cookie
+          // alone only asked the browser to forget a credential that still
+          // worked — which is the whole reason the secret stopped being it.
+          const token = cookie(req, "walao_op");
+          if (token) {
+            await pool.query(`DELETE FROM operator_sessions WHERE token_sha256 = $1`, [
+              hashToken(token),
+            ]);
+          }
           setCookie(req, res, "walao_op", "");
           send(res, 200, { ok: true });
           return;
@@ -144,13 +173,28 @@ export function createApp(deps: {
             send(res, 401, { error: "unauthorized" });
             return;
           }
-          setCookie(req, res, "walao_op", secret);
+          // F3: the cookie carries a session token, not the secret itself — so
+          // a leaked cookie is revocable, expires on its own, and is not the
+          // permanent operator credential in transit on every request.
+          const token = randomBytes(32).toString("hex");
+          await pool.query(`INSERT INTO operator_sessions (token_sha256) VALUES ($1)`, [
+            hashToken(token),
+          ]);
+          setCookie(req, res, "walao_op", token);
           send(res, 200, { ok: true });
           return;
         }
       }
 
-      if (!operatorOk(header(req, "x-walao-operator-secret") || (cookie(req, "walao_op") ?? ""))) {
+      // The header path stays the constant-time secret compare (scripts and
+      // curl still use it); the cookie path is a unique-indexed lookup of a
+      // token that is worthless once revoked or expired.
+      const opSecret = header(req, "x-walao-operator-secret");
+      const opCookie = cookie(req, "walao_op");
+      const authorized = opSecret
+        ? operatorOk(opSecret)
+        : opCookie !== null && (await operatorSessionOk(pool, opCookie));
+      if (!authorized) {
         send(res, 401, { error: "unauthorized" });
         return;
       }
@@ -249,8 +293,22 @@ export function createApp(deps: {
         return;
       }
       const b = body as Record<string, unknown>;
+      // F4: counted per address and per source. Normalised first, so casing
+      // cannot split one address across buckets. An address that does not parse
+      // is not counted at all — it writes no row and sends no mail, so it costs
+      // a regex, and spending a DB round trip to throttle a regex would be the
+      // more expensive half of that trade.
+      const ip = clientIp(req);
+      const email = normalizeEmail(b.email);
 
       if (url.pathname === "/v1/verify") {
+        // Over the limit answers exactly like a wrong code. A limiter that
+        // announces itself is a limiter an attacker can calibrate against —
+        // and here it would also leak that the address is worth attacking.
+        if (email !== null && !(await allowBoth(pool, "verify", email, ip, VERIFY_PER_EMAIL, VERIFY_PER_IP))) {
+          send(res, 400, { error: "invalid_code" });
+          return;
+        }
         const result = await verify(pool, b.email, b.code);
         if (result === "invalid") {
           send(res, 400, { error: "invalid_code" });
@@ -261,6 +319,17 @@ export function createApp(deps: {
         // read. The body still carries it, so API clients are unaffected.
         setCookie(req, res, "walao_session", result.token);
         send(res, 200, result);
+        return;
+      }
+
+      // Both of these send a real email. Over the limit answers 202 — the same
+      // envelope a genuine request gets — so throttling cannot be used to tell
+      // a known address from an unknown one either (F4).
+      if (
+        email !== null &&
+        !(await allowBoth(pool, "code", email, ip, EMAIL_CODE_PER_EMAIL, EMAIL_CODE_PER_IP))
+      ) {
+        send(res, 202, { ok: true });
         return;
       }
 
@@ -768,7 +837,9 @@ export function createApp(deps: {
   return { handler, drain: () => drainQueue(pool, gateway, config) };
 }
 
-const PUBLIC_DIR = fileURLToPath(new URL("../public/", import.meta.url));
+// Resolved (so no trailing separator) — the F5 guard below appends its own and
+// would otherwise compare against a doubled slash that matches nothing.
+const PUBLIC_DIR = path.resolve(fileURLToPath(new URL("../public/", import.meta.url)));
 
 const MIME: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
@@ -776,7 +847,39 @@ const MIME: Record<string, string> = {
   ".js": "text/javascript; charset=utf-8",
   ".svg": "image/svg+xml",
   ".png": "image/png",
+  ".txt": "text/plain; charset=utf-8",
 };
+
+// F1. Strict because it can be: after the inline page scripts moved into
+// public/*.js and the QR library was vendored, the app loads nothing it does
+// not serve itself, so 'self' needs no escape hatch and an injected <script>
+// has nowhere to come from. `data:` on img-src is the QR code, which is a data
+// URL by construction.
+const CSP = [
+  "default-src 'self'",
+  "script-src 'self'",
+  "style-src 'self'",
+  "img-src 'self' data:",
+  "connect-src 'self'",
+  "font-src 'self'",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "frame-ancestors 'none'",
+].join("; ");
+
+// Every response, not only the HTML ones: a JSON error page is still a document
+// a browser can be tricked into rendering. HSTS is unconditional — browsers
+// ignore it over plain HTTP, so dev on localhost is unaffected and nothing has
+// to know whether it is deployed.
+function securityHeaders(res: ServerResponse): void {
+  res.setHeader("content-security-policy", CSP);
+  res.setHeader("strict-transport-security", "max-age=15552000; includeSubDomains");
+  res.setHeader("x-content-type-options", "nosniff");
+  res.setHeader("x-frame-options", "DENY");
+  res.setHeader("referrer-policy", "no-referrer");
+  res.setHeader("permissions-policy", "camera=(), microphone=(), geolocation=()");
+}
 
 // Static branch: `/` is the shell, an extensionless path is that page's .html,
 // anything else is served as itself. The resolve-then-prefix check is the
@@ -794,7 +897,9 @@ async function serveStatic(res: ServerResponse, pathname: string): Promise<boole
   else if (!path.extname(rel)) rel += ".html";
 
   const file = path.resolve(PUBLIC_DIR, "." + rel);
-  if (!file.startsWith(PUBLIC_DIR)) return false;
+  // F5: prefix alone is not containment — a sibling directory named `public-x`
+  // shares the prefix and would be served. The separator is the boundary.
+  if (file !== PUBLIC_DIR && !file.startsWith(PUBLIC_DIR + path.sep)) return false;
 
   let body: Buffer;
   try {
@@ -802,9 +907,20 @@ async function serveStatic(res: ServerResponse, pathname: string): Promise<boole
   } catch {
     return false; // missing, or a directory — both are 404
   }
+  securityHeaders(res);
   res.writeHead(200, { "content-type": MIME[path.extname(file)] ?? "application/octet-stream" });
   res.end(body);
   return true;
+}
+
+// F3: a live Operator session, or nothing. Expiry is in the same query as the
+// lookup, so an expired session is indistinguishable from a revoked one.
+async function operatorSessionOk(pool: pg.Pool, token: string): Promise<boolean> {
+  const { rows } = await pool.query(
+    `SELECT 1 FROM operator_sessions WHERE token_sha256 = $1 AND expires_at > now()`,
+    [hashToken(token)],
+  );
+  return rows.length > 0;
 }
 
 // undefined = malformed JSON (caller sends 400). Empty body parses as {}.
@@ -816,11 +932,32 @@ async function readJsonBody(req: IncomingMessage): Promise<unknown> {
   }
 }
 
+// F4: no request this app accepts is close to a megabyte — the largest is one
+// WhatsApp event — so anything past it is either a mistake or an attempt to make
+// the process hold arbitrary memory. Over the cap the promise rejects and
+// nothing further is buffered; the socket is drained rather than destroyed so
+// the caller still gets its 400 back.
+const MAX_BODY_BYTES = 1_000_000;
+
 function readRawBody(req: IncomingMessage): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
-    req.on("data", (c) => chunks.push(c as Buffer));
-    req.on("end", () => resolve(Buffer.concat(chunks)));
+    let size = 0;
+    let over = false;
+    req.on("data", (c) => {
+      if (over) return;
+      size += (c as Buffer).length;
+      if (size > MAX_BODY_BYTES) {
+        over = true;
+        chunks.length = 0;
+        reject(new Error("body_too_large"));
+        return;
+      }
+      chunks.push(c as Buffer);
+    });
+    req.on("end", () => {
+      if (!over) resolve(Buffer.concat(chunks));
+    });
     req.on("error", reject);
   });
 }
@@ -828,6 +965,17 @@ function readRawBody(req: IncomingMessage): Promise<Buffer> {
 function header(req: IncomingMessage, name: string): string {
   const v = req.headers[name];
   return Array.isArray(v) ? (v[0] ?? "") : (v ?? "");
+}
+
+// F4: behind a proxy every request arrives from the proxy's address, which
+// would quietly turn the per-source limit into one global limit. The *last*
+// X-Forwarded-For entry is the one the nearest trusted proxy appended, so a
+// client that forges the header only lengthens a list it does not get to end.
+// With no proxy in front there is no header and the socket address is the truth.
+function clientIp(req: IncomingMessage): string {
+  const forwarded = header(req, "x-forwarded-for").split(",");
+  const nearest = forwarded[forwarded.length - 1].trim();
+  return nearest || req.socket.remoteAddress || "unknown";
 }
 
 function bearer(req: IncomingMessage): string | null {
@@ -857,6 +1005,7 @@ function setCookie(req: IncomingMessage, res: ServerResponse, name: string, valu
 }
 
 function send(res: ServerResponse, status: number, body: unknown): void {
+  securityHeaders(res);
   if (body === null) {
     res.writeHead(status);
     res.end();

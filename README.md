@@ -15,6 +15,41 @@
 
 ---
 
+## Running it locally / 本地运行
+
+Node 24+ and a PostgreSQL. There is no build step — Node runs the TypeScript
+sources directly.
+
+```bash
+npm install
+cp .env.example .env          # fill in DATABASE_URL and WALAO_ENC_KEY at minimum
+npm run dev                   # http://localhost:3000
+```
+
+### Tests
+
+The suite truncates every table it touches, so it refuses to run against any
+database whose name does not end in `_test` (`test/helpers.ts`). Nothing creates
+that database for you — this is the one-time step:
+
+```bash
+createdb walao_test
+# or, against the docker-compose Postgres:
+docker compose exec postgres createdb -U walao walao_test
+```
+
+Then, every time:
+
+```bash
+npm run typecheck
+DATABASE_URL=postgres://localhost:5432/walao_test npm test
+```
+
+Migrations are applied by the harness on the first connection, so a freshly
+created `walao_test` needs no further setup.
+
+---
+
 # 中文
 
 ## 1. 产品概述

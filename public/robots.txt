@@ -1,0 +1,5 @@
+# F11. The API and the Operator console are credentialed, so a crawler can only
+# collect 401s from them — say so rather than making it find out.
+User-agent: *
+Disallow: /admin/
+Disallow: /v1/

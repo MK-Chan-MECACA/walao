@@ -1,0 +1,233 @@
+import { api, message } from "/api.js";
+import { el, fmtDate } from "/layout.js";
+
+const $ = (id) => document.getElementById(id);
+const fail = (id, err) => {
+  $(id).textContent = message(err);
+  $(id).hidden = false;
+};
+
+// The only way to know whether the cookie is still good is to use it, and
+// the halt state is needed anyway — one request answers both.
+try {
+  showConsole(await api("GET", "/admin/halt"));
+} catch {
+  $("gate").hidden = false;
+}
+
+$("gate-form").onsubmit = async (e) => {
+  e.preventDefault();
+  $("gate-error").hidden = true;
+  try {
+    await api("POST", "/admin/session", { secret: $("secret").value });
+    $("secret").value = "";
+    $("gate").hidden = true;
+    showConsole(await api("GET", "/admin/halt"));
+  } catch (err) {
+    // The one 401 in the product that isn't a dead session: a mistyped
+    // secret. Global wording would say "you're not signed in", which is
+    // exactly what the Operator is trying to fix.
+    $("gate-error").textContent =
+      err.status === 401 ? "That secret is wrong." : message(err);
+    $("gate-error").hidden = false;
+  }
+};
+
+$("signout").onclick = async () => {
+  await api("DELETE", "/admin/session").catch(() => {});
+  location.reload();
+};
+
+function showConsole(halt) {
+  $("console").hidden = false;
+  renderHalt(halt.halted);
+  loadQueue();
+}
+
+// §58: the state is on the face of the control, so the button never has to
+// be pressed to find out which way it was left.
+function renderHalt(halted) {
+  $("halt-state").textContent = halted
+    ? "WALAO is HALTED product-wide."
+    : "WALAO is running normally.";
+  const btn = $("halt-toggle");
+  btn.textContent = halted ? "Resume the product" : "Halt the product";
+  btn.onclick = async () => {
+    $("halt-error").hidden = true;
+    btn.disabled = true;
+    try {
+      const res = await api("POST", halted ? "/admin/resume" : "/admin/halt");
+      renderHalt(res.halted);
+    } catch (err) {
+      fail("halt-error", err);
+    }
+    btn.disabled = false;
+  };
+}
+
+let currentId = null;
+
+$("lookup-form").onsubmit = async (e) => {
+  e.preventDefault();
+  $("lookup-error").hidden = true;
+  const id = $("account-id").value.trim();
+  try {
+    renderAccount(id, await api("GET", `/admin/accounts/${encodeURIComponent(id)}`));
+  } catch (err) {
+    $("account").hidden = true;
+    // A 404 here is a typed id that matches no Account — the global
+    // "reload the page" wording would send the Operator nowhere.
+    $("lookup-error").textContent =
+      err.status === 404 ? "No Account has that id." : message(err);
+    $("lookup-error").hidden = false;
+  }
+};
+
+function row(label, value) {
+  return el("li", {}, el("span", { class: "muted", text: label }), el("span", { text: value }));
+}
+
+function renderAccount(id, m) {
+  currentId = id;
+  $("account").hidden = false;
+  const a = m.account;
+  const jobs = Object.entries(m.jobs);
+  $("account-rows").replaceChildren(
+    row("Account", a.id),
+    row("Email", a.email ?? "—"),
+    row("Plan (stored)", a.plan),
+    row("Processing", m.status.processing ? "running" : `blocked — ${m.status.block?.reason}`),
+    row("Paused", a.paused ? "yes" : "no"),
+    row("Unpaid", a.unpaid ? "yes" : "no"),
+    row("Quality review opt-in", a.quality_review_opt_in ? "yes" : "no"),
+    row("Retention", `${a.retention_days} days`),
+    row("Created", fmtDate(a.created_at)),
+    row("Last login", a.last_login_at ? fmtDate(a.last_login_at) : "never"),
+    row(
+      "Counts",
+      `${m.counts.groups_enabled}/${m.counts.groups} Groups enabled · ${m.counts.messages} messages · ${m.counts.summaries} Summaries · ${m.counts.reminders} Reminders · ${m.counts.memories} Memories`,
+    ),
+    row("Jobs", jobs.length ? jobs.map(([s, n]) => `${s}: ${n}`).join(" · ") : "none"),
+    row("Tokens", `${m.tokens.input} in · ${m.tokens.output} out`),
+    row(
+      "Coverage gap",
+      m.status.coverage_gap
+        ? `open since ${fmtDate(m.status.coverage_gap.started_at)} (${m.status.coverage_gap.reason})`
+        : "none open",
+    ),
+  );
+  $("account-sessions").replaceChildren(
+    ...(m.sessions.length
+      ? m.sessions.map((s) =>
+          row(
+            `${s.external_session_id} · created ${fmtDate(s.created_at)}`,
+            `${s.status} since ${fmtDate(s.status_changed_at)}`,
+          ),
+        )
+      : [el("li", { class: "muted", text: "No Session has ever been paired." })]),
+  );
+  $("plan").value = a.plan;
+}
+
+$("plan-form").onsubmit = async (e) => {
+  e.preventDefault();
+  $("plan-error").hidden = true;
+  try {
+    await api("PUT", `/admin/accounts/${encodeURIComponent(currentId)}/plan`, {
+      plan: $("plan").value,
+    });
+    renderAccount(currentId, await api("GET", `/admin/accounts/${encodeURIComponent(currentId)}`));
+  } catch (err) {
+    fail("plan-error", err);
+  }
+};
+
+// §59: the Malay lane is reviewed one Summary at a time; the beta lane is
+// one weekly record of counts.
+async function loadQueue() {
+  let q;
+  try {
+    q = await api("GET", "/admin/review/queue");
+  } catch (err) {
+    $("queue").textContent = message(err);
+    return;
+  }
+  if (!$("reviewer").value) $("reviewer").value = q.malay.quality_owner;
+  $("queue").replaceChildren(
+    el("h3", { text: `Malay — ${q.malay.pending.length} awaiting review` }),
+    ...(q.malay.pending.length
+      ? q.malay.pending.map(malayRow)
+      : [el("p", { class: "muted", text: "Nothing pending in the last 7 days." })]),
+    el("h3", { text: "Beta — last 7 days" }),
+    el("p", {
+      class: "muted",
+      text: `${q.beta.summaries_7d} Summaries · ${q.beta.privacy_events_7d} privacy events · ${q.beta.reviewed ? "reviewed this week" : "not yet reviewed this week"}`,
+    }),
+    betaForm(),
+  );
+}
+
+function malayRow(p) {
+  const body = el("div", { class: "sources" });
+  for (const [section, items] of Object.entries(p.payload)) {
+    if (!Array.isArray(items) || items.length === 0) continue;
+    body.append(el("p", { class: "muted", text: section.replace(/_/g, " ") }));
+    for (const it of items) body.append(el("p", { class: "source", text: it.text }));
+  }
+  return el(
+    "div",
+    { class: "card" },
+    el("p", {
+      class: "muted",
+      text: `Summary ${p.summary_id.slice(0, 8)} · Account ${p.user_id.slice(0, 8)} · ${fmtDate(p.window_start)} → ${fmtDate(p.window_end)}`,
+    }),
+    body,
+    el(
+      "div",
+      { class: "actions" },
+      el("button", {
+        text: "Pass",
+        onclick: () => review({ kind: "malay", summary_id: p.summary_id, verdict: { ok: true } }),
+      }),
+      el("button", {
+        class: "secondary",
+        text: "Fail",
+        onclick: () =>
+          review({ kind: "malay", summary_id: p.summary_id, verdict: { ok: false } }),
+      }),
+    ),
+  );
+}
+
+function betaForm() {
+  const fields = ["accuracy_issues", "omissions", "privacy_events"].map((k) => [
+    k,
+    el("input", { type: "number", id: `beta-${k}`, min: "0", step: "1", value: "0" }),
+  ]);
+  return el(
+    "div",
+    { class: "form" },
+    ...fields.flatMap(([k, input]) => [
+      el("label", { for: `beta-${k}`, text: k.replace(/_/g, " ") }),
+      input,
+    ]),
+    el("button", {
+      text: "Record weekly review",
+      onclick: () =>
+        review({
+          kind: "beta",
+          verdict: Object.fromEntries(fields.map(([k, i]) => [k, Number(i.value)])),
+        }),
+    }),
+  );
+}
+
+async function review(body) {
+  $("review-error").hidden = true;
+  try {
+    await api("POST", "/admin/review", { ...body, reviewer: $("reviewer").value.trim() });
+    await loadQueue();
+  } catch (err) {
+    fail("review-error", err);
+  }
+}

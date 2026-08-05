@@ -26,8 +26,24 @@ export async function setRetentionDays(
 
 // Delete every raw message whose expiry has passed — all senders equally,
 // WALAO users or not. `now` is injectable so the whole-system test can advance
-// a controlled clock. Returns rows deleted.
+// a controlled clock. Returns rows deleted (messages only — the credential
+// sweeps below ride this timer rather than owning one, and nothing counts them).
 export async function purgeExpired(pool: pg.Pool, now: Date = new Date()): Promise<number> {
   const res = await pool.query(`DELETE FROM messages WHERE expires_at <= $1`, [now]);
+
+  // F7: an expired token already fails authenticate(); dropping the hash means
+  // the row stops holding a credential at all.
+  await pool.query(
+    `UPDATE users SET api_token_sha256 = NULL, token_expires_at = NULL
+     WHERE token_expires_at <= $1 AND api_token_sha256 IS NOT NULL`,
+    [now],
+  );
+  // F3: expired Operator sessions are refused on lookup; this is the cleanup.
+  await pool.query(`DELETE FROM operator_sessions WHERE expires_at <= $1`, [now]);
+  // F4: a limiter window nobody has touched for a day cannot deny anything.
+  await pool.query(`DELETE FROM rate_limits WHERE window_start < $1::timestamptz - interval '1 day'`, [
+    now,
+  ]);
+
   return res.rowCount ?? 0;
 }

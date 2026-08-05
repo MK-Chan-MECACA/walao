@@ -4,7 +4,11 @@
    details/summary); everything below is those elements wearing the system's
    tokens, so a visual change stays a change to this file. */
 
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
+/* F1/F2: the Google Fonts @import was the last third-party origin left. It
+   breaks `style-src 'self'` and tells Google the IP of everyone who opens the
+   app, which is a strange thing for a product about data custody to do. The
+   stack below already falls back to system-ui; vendor Inter's woff2 into
+   public/vendor/ if the exact face turns out to matter. */
 
 :root {
   --color-bg: #161826;

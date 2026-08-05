@@ -1,9 +1,12 @@
 import { after, before, beforeEach, test } from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
+import { mkdir, rm, writeFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 import { makeHarness, OPERATOR_SECRET, type Harness } from "./helpers.ts";
 import { DATA_PROCESSING_TERMS as TERMS } from "../src/attestations.ts";
 import { ATTESTATION_VERSION as VERSION } from "../src/subscriptions.ts";
+import { purgeExpired } from "../src/retention.ts";
 
 // Ticket 29 (app spec §1-5, §20, §41, §54-55): the backend the web surface
 // needs before a line of HTML exists — cookie sessions, a real logout, static
@@ -194,6 +197,298 @@ test("the app's own assets are served with the content types a browser needs", a
     assert.equal(res.status, 200, path);
     assert.match(res.headers["content-type"] as string, type, path);
   }
+});
+
+// F1 (audit): the headers that decide what a single injected string is allowed
+// to do. They have to be on every response, not only the HTML ones — a JSON
+// error body is still something a browser can be talked into rendering.
+
+test("every response carries the security headers, whatever it is answering", async () => {
+  const s = await newSession("csp@example.com");
+
+  for (const [method, path, headers] of [
+    ["GET", "/", {}],
+    ["GET", "/today", {}],
+    ["GET", "/app.css", {}],
+    ["GET", "/vendor/qrcode.min.js", {}],
+    ["GET", "/v1/summaries", { cookie: s.cookie }],
+    ["GET", "/v1/nope", { cookie: s.cookie }],
+    ["POST", "/webhooks/gateway", {}],
+    ["GET", "/admin/review/queue", {}], // a 401 is a response too
+  ] as const) {
+    const res = await raw(method, path, { headers });
+    const where = `${method} ${path}`;
+    assert.equal(res.headers["x-content-type-options"], "nosniff", where);
+    assert.equal(res.headers["x-frame-options"], "DENY", where);
+    assert.equal(res.headers["referrer-policy"], "no-referrer", where);
+    assert.match(res.headers["strict-transport-security"] as string, /max-age=\d+/, where);
+    const csp = res.headers["content-security-policy"] as string;
+    assert.ok(csp, `${where} has a CSP`);
+    // Strict because F1+F2 made it possible to be: no inline script, no CDN.
+    assert.match(csp, /(^|; )script-src 'self'(;|$)/, where);
+    assert.match(csp, /(^|; )frame-ancestors 'none'(;|$)/, where);
+    assert.match(csp, /(^|; )object-src 'none'(;|$)/, where);
+    assert.doesNotMatch(csp, /unsafe-inline|unsafe-eval/, where);
+  }
+});
+
+test("no page carries an inline script for the CSP to have to allow", async () => {
+  for (const path of ["/", "/pair", "/today", "/groups", "/lists", "/ask", "/settings", "/ops"]) {
+    const res = await raw("GET", path);
+    assert.equal(res.status, 200, path);
+    // Every <script> points at a file this origin serves. An inline one would
+    // mean script-src 'self' silently stopped the page from working.
+    for (const tag of res.text.match(/<script[^>]*>/g) ?? []) {
+      assert.match(tag, /\ssrc="\/[^"]+"/, `${path}: ${tag}`);
+    }
+    assert.doesNotMatch(res.text, /https?:\/\/(?!127\.0\.0\.1|localhost)/, `${path} loads no CDN`);
+  }
+
+  // F2: the QR library is ours now, and it is the real one.
+  const lib = await raw("GET", "/vendor/qrcode.min.js");
+  assert.equal(lib.status, 200);
+  assert.match(lib.headers["content-type"] as string, /^text\/javascript/);
+  assert.match(lib.text, /createDataURL/); // what pair.js builds the <img> from
+
+  // F11: the two files a browser and a crawler each ask for unprompted.
+  const icon = await raw("GET", "/favicon.svg");
+  assert.equal(icon.status, 200);
+  assert.match(icon.headers["content-type"] as string, /^image\/svg\+xml/);
+  const robots = await raw("GET", "/robots.txt");
+  assert.equal(robots.status, 200);
+  assert.match(robots.headers["content-type"] as string, /^text\/plain/);
+  assert.match(robots.text, /Disallow: \/admin\//);
+  assert.match(robots.text, /Disallow: \/v1\//);
+});
+
+// F5: a prefix is not a boundary. Latent while no sibling directory shares the
+// prefix, so the test makes one — the guard has to hold on its own terms, not
+// because of what happens to be next to public/ today.
+test("a sibling directory that shares public/'s name prefix is not servable", async () => {
+  const sibling = fileURLToPath(new URL("../public-secret/", import.meta.url));
+  await mkdir(sibling, { recursive: true });
+  await writeFile(`${sibling}marker.txt`, "SIBLING_MARKER");
+  try {
+    for (const path of [
+      "/../public-secret/marker.txt",
+      "/%2e%2e/public-secret/marker.txt",
+      "/..%2fpublic-secret%2fmarker.txt",
+      "/%2e%2e%2fpublic-secret%2fmarker.txt",
+    ]) {
+      const res = await raw("GET", path);
+      assert.equal(res.status, 404, path);
+      assert.doesNotMatch(res.text, /SIBLING_MARKER/, path);
+    }
+  } finally {
+    await rm(sibling, { recursive: true, force: true });
+  }
+});
+
+// F6: the container's liveness probe. Public on purpose, so it must say nothing.
+test("/healthz answers without a credential and without telling anyone anything", async () => {
+  const res = await raw("GET", "/healthz");
+  assert.equal(res.status, 200);
+  assert.deepEqual(res.body, { ok: true });
+});
+
+// F3: the Operator cookie used to *be* the permanent secret. Now it is a session
+// that can be revoked, expires on its own, and is not the credential in transit.
+
+test("the Operator cookie is a session token, not the operator secret itself", async () => {
+  const ok = await raw("POST", "/admin/session", { body: { secret: OPERATOR_SECRET } });
+  assert.equal(ok.status, 200);
+  const cookie = setCookie(ok).split(";")[0];
+  const token = cookie.slice("walao_op=".length);
+
+  // The whole point: a leaked cookie is not the credential.
+  assert.notEqual(token, OPERATOR_SECRET);
+  assert.match(token, /^[0-9a-f]{64}$/);
+  assert.ok(!token.includes(OPERATOR_SECRET));
+
+  // It authorises, and it is backed by a row rather than by a string compare.
+  assert.equal((await raw("GET", "/admin/review/queue", { headers: { cookie } })).status, 200);
+  const { rows } = await h.pool.query(`SELECT count(*)::int AS n FROM operator_sessions`);
+  assert.equal(rows[0].n, 1);
+  // Stored as a hash, like every other credential this app holds.
+  const stored = await h.pool.query(`SELECT token_sha256 FROM operator_sessions`);
+  assert.notEqual(stored.rows[0].token_sha256, token);
+
+  // A token nobody issued is not a session.
+  assert.equal(
+    (await raw("GET", "/admin/review/queue", { headers: { cookie: `walao_op=${"0".repeat(64)}` } }))
+      .status,
+    401,
+  );
+});
+
+test("signing out ends the Operator session server-side, not just in the browser", async () => {
+  const ok = await raw("POST", "/admin/session", { body: { secret: OPERATOR_SECRET } });
+  const cookie = setCookie(ok).split(";")[0];
+  assert.equal((await raw("GET", "/admin/review/queue", { headers: { cookie } })).status, 200);
+
+  const out = await raw("DELETE", "/admin/session", { headers: { cookie } });
+  assert.equal(out.status, 200);
+  assert.match(setCookie(out), /^walao_op=;.*Max-Age=0/);
+
+  // The browser's copy is now worthless — which is what "sign out" has to mean.
+  assert.equal((await raw("GET", "/admin/review/queue", { headers: { cookie } })).status, 401);
+  const { rows } = await h.pool.query(`SELECT count(*)::int AS n FROM operator_sessions`);
+  assert.equal(rows[0].n, 0);
+
+  // The header path is untouched: scripts and curl still use the secret.
+  assert.equal((await h.op("GET", "/admin/review/queue")).status, 200);
+});
+
+test("an expired Operator session is refused, and the purge collects it", async () => {
+  const ok = await raw("POST", "/admin/session", { body: { secret: OPERATOR_SECRET } });
+  const cookie = setCookie(ok).split(";")[0];
+
+  await h.pool.query(`UPDATE operator_sessions SET expires_at = now() - interval '1 minute'`);
+  assert.equal((await raw("GET", "/admin/review/queue", { headers: { cookie } })).status, 401);
+
+  await purgeExpired(h.pool);
+  const { rows } = await h.pool.query(`SELECT count(*)::int AS n FROM operator_sessions`);
+  assert.equal(rows[0].n, 0);
+});
+
+// F4: nothing throttled anything, and two of these routes send real email.
+
+test("a mailbox cannot be flooded, and the limiter says so in the same words as success", async () => {
+  const email = "flood@example.com";
+  for (let i = 0; i < 5; i++) {
+    const res = await raw("POST", "/v1/signup", { body: { email, terms_version: TERMS.version } });
+    assert.equal(res.status, 202, `request ${i + 1} is inside the limit`);
+  }
+  assert.equal(h.codes.length, 5);
+
+  const over = await raw("POST", "/v1/signup", { body: { email, terms_version: TERMS.version } });
+  // Same status and same body as a request that worked: the limiter must not
+  // become the oracle the 202-always answer exists to prevent.
+  assert.equal(over.status, 202);
+  assert.deepEqual(over.body, { ok: true });
+  assert.equal(h.codes.length, 5, "no sixth email was sent");
+
+  // Login shares the budget — it is the same act and the same mailbox.
+  const viaLogin = await raw("POST", "/v1/login", { body: { email } });
+  assert.equal(viaLogin.status, 202);
+  assert.equal(h.codes.length, 5);
+
+  // A different address is unaffected: the limit is per mailbox, not global.
+  const other = await raw("POST", "/v1/signup", {
+    body: { email: "not-flooded@example.com", terms_version: TERMS.version },
+  });
+  assert.equal(other.status, 202);
+  assert.equal(h.codes.length, 6);
+});
+
+test("one source cannot mail-bomb many addresses either", async () => {
+  // Twenty per hour per source, so the twenty-first address gets nothing even
+  // though its own mailbox has never been written to.
+  for (let i = 0; i < 20; i++) {
+    await raw("POST", "/v1/signup", {
+      body: { email: `bomb${i}@example.com`, terms_version: TERMS.version },
+    });
+  }
+  assert.equal(h.codes.length, 20);
+
+  const over = await raw("POST", "/v1/signup", {
+    body: { email: "bomb-last@example.com", terms_version: TERMS.version },
+  });
+  assert.equal(over.status, 202);
+  assert.equal(h.codes.length, 20, "the source is out of budget, whoever it asks for");
+  const { rows } = await h.pool.query(
+    `SELECT count(*)::int AS n FROM users WHERE email = 'bomb-last@example.com'`,
+  );
+  assert.equal(rows[0].n, 0, "and no row was written for the refused address");
+});
+
+test("code guessing is capped, and being capped looks exactly like guessing wrong", async () => {
+  const email = "guess@example.com";
+  await raw("POST", "/v1/signup", { body: { email, terms_version: TERMS.version } });
+  const code = h.codes[h.codes.length - 1].code;
+
+  for (let i = 0; i < 10; i++) {
+    const res = await raw("POST", "/v1/verify", { body: { email, code: "WRONG123" } });
+    assert.equal(res.status, 400);
+    assert.deepEqual(res.body, { error: "invalid_code" });
+  }
+
+  // The eleventh attempt is refused by the limiter — including the right code,
+  // which is the point: the attacker cannot tell the two apart, and neither
+  // response says anything the other does not.
+  const over = await raw("POST", "/v1/verify", { body: { email, code } });
+  assert.equal(over.status, 400);
+  assert.deepEqual(over.body, { error: "invalid_code" });
+
+  // An unparseable address is rejected on the regex, so it never spends budget
+  // and the contract that it answers 400 invalid_email is unchanged.
+  const malformed = await raw("POST", "/v1/signup", {
+    body: { email: "not-an-email", terms_version: TERMS.version },
+  });
+  assert.equal(malformed.status, 400);
+  assert.deepEqual(malformed.body, { error: "invalid_email" });
+});
+
+test("a body far larger than any real request is refused instead of buffered", async () => {
+  const huge = "x".repeat(1_100_000);
+
+  const signup = await raw("POST", "/v1/signup", { body: { email: `${huge}@example.com` } });
+  assert.equal(signup.status, 400);
+  assert.deepEqual(signup.body, { error: "bad_json" });
+
+  // The webhook is the one route that reads a raw body, and it refuses before
+  // computing an HMAC — which would have to read all of it to say no.
+  const hook = await raw("POST", "/webhooks/gateway", {
+    headers: { "x-walao-signature": "00" },
+    body: { kind: "message", text: huge },
+  });
+  assert.equal(hook.status, 400);
+
+  // A body just under the cap still works: the guard is a cap, not a new limit
+  // on ordinary requests.
+  const fine = await raw("POST", "/v1/signup", {
+    body: { email: "big-but-fine@example.com", terms_version: TERMS.version, pad: "y".repeat(900_000) },
+  });
+  assert.equal(fine.status, 202);
+});
+
+// F7: a token that never expires is a leak with no deadline.
+
+test("a bearer token expires, and the purge stops the row holding it at all", async () => {
+  const s = await newSession("ttl@example.com");
+  const { rows } = await h.pool.query(
+    `SELECT token_expires_at, token_expires_at > now() + interval '29 days' AS long_enough
+     FROM users WHERE email = 'ttl@example.com'`,
+  );
+  assert.ok(rows[0].token_expires_at, "verifying stamps a deadline on the token it mints");
+  assert.equal(rows[0].long_enough, true);
+
+  // Still inside the window: both credentials work.
+  assert.equal((await raw("GET", "/v1/summaries", { headers: { cookie: s.cookie } })).status, 200);
+
+  await h.pool.query(
+    `UPDATE users SET token_expires_at = now() - interval '1 second' WHERE email = 'ttl@example.com'`,
+  );
+  assert.equal((await raw("GET", "/v1/summaries", { headers: { cookie: s.cookie } })).status, 401);
+  assert.equal(
+    (await raw("GET", "/v1/summaries", { headers: { authorization: `Bearer ${s.token}` } })).status,
+    401,
+  );
+
+  // And the hash goes with it, so the row stops holding a credential.
+  await purgeExpired(h.pool);
+  const after = await h.pool.query(
+    `SELECT api_token_sha256, token_expires_at FROM users WHERE email = 'ttl@example.com'`,
+  );
+  assert.equal(after.rows[0].api_token_sha256, null);
+  assert.equal(after.rows[0].token_expires_at, null);
+
+  // Signing in again is the renewal — there is nothing new for a client to call.
+  const fresh = await newSession("ttl@example.com");
+  assert.equal(
+    (await raw("GET", "/v1/summaries", { headers: { cookie: fresh.cookie } })).status,
+    200,
+  );
 });
 
 test("a Summary's sources are exactly the messages it cites, and only its owner's", async () => {

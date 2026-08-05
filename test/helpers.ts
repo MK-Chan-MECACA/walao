@@ -280,9 +280,13 @@ export async function makeHarness(): Promise<Harness> {
       });
       return { status: res.status, body: await res.json().catch(() => null) };
     },
+    // F7: a seeded token carries the same 30-day expiry verify() mints, because
+    // authenticate() now refuses a token without one — a seeded Account has to
+    // be the Account the app would have made, not a shape only tests can hold.
     async seedUser(token) {
       const { rows } = await pool.query(
-        `INSERT INTO users (api_token_sha256) VALUES ($1) RETURNING id`,
+        `INSERT INTO users (api_token_sha256, token_expires_at)
+         VALUES ($1, now() + interval '30 days') RETURNING id`,
         [hashToken(token)],
       );
       return rows[0].id;
@@ -369,7 +373,10 @@ export async function makeHarness(): Promise<Harness> {
       answerer.canned = {};
       answerer.calls = [];
       await pool.query(
-        `TRUNCATE messages, summaries, summary_jobs, summary_schedules, attestations, coverage_gaps, groups, whatsapp_sessions, users, ingest_events, privacy_audit, quality_reviews, trials RESTART IDENTITY CASCADE`,
+        // operator_sessions and rate_limits are per-test state too: a limiter
+        // that remembered the previous test would start refusing signups
+        // partway through the suite, from the one IP every test shares.
+        `TRUNCATE messages, summaries, summary_jobs, summary_schedules, attestations, coverage_gaps, groups, whatsapp_sessions, users, ingest_events, privacy_audit, quality_reviews, trials, operator_sessions, rate_limits RESTART IDENTITY CASCADE`,
       );
       // system_halt is a singleton row, not per-test data — un-halt, don't truncate.
       await pool.query(`UPDATE system_halt SET halted = false`);
