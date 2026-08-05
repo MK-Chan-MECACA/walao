@@ -2,6 +2,7 @@ import type pg from "pg";
 import type { Config } from "./config.ts";
 import { decrypt, hashToken } from "./crypto.ts";
 import { accountKey } from "./accounts.ts";
+import { loadSenderNames } from "./sender-names.ts";
 import type { Cited, SummaryPayload } from "./summarize.ts";
 
 export type ApiMessage = {
@@ -41,14 +42,15 @@ export async function listMessages(
     [userId],
   );
   const key = await accountKey(pool, config, userId);
+  const names = await loadSenderNames(pool, userId);
   return rows.map((r) => ({
     id: r.id,
     group_id: r.group_id,
     external_id: r.external_id,
     sender_ref: r.sender_ref,
-    sender_name: r.sender_name,
+    sender_name: names.nameFor(r.sender_ref, r.sender_name),
     sent_at: new Date(r.sent_at).toISOString(),
-    text: decrypt(r.body_ciphertext, key),
+    text: names.resolveMentions(decrypt(r.body_ciphertext, key)),
   }));
 }
 
@@ -81,13 +83,14 @@ export async function summarySources(
     [userId, ids],
   );
   const key = await accountKey(pool, config, userId);
+  const names = await loadSenderNames(pool, userId);
   return msgs.rows.map((r) => ({
     id: r.id,
     group_id: r.group_id,
     sender_ref: r.sender_ref,
-    sender_name: r.sender_name,
+    sender_name: names.nameFor(r.sender_ref, r.sender_name),
     sent_at: new Date(r.sent_at).toISOString(),
-    text: decrypt(r.body_ciphertext, key),
+    text: names.resolveMentions(decrypt(r.body_ciphertext, key)),
   }));
 }
 

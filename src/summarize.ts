@@ -4,6 +4,7 @@ import { decrypt } from "./crypto.ts";
 import { accountKey } from "./accounts.ts";
 import type { Language } from "./scheduler.ts";
 import { processingBlock } from "./block.ts";
+import { loadSenderNames } from "./sender-names.ts";
 
 // SummarizerPort — the AI boundary (spec: batch + config in, structured JSON
 // out). The port receives plain data and returns plain data; it holds no tool
@@ -183,13 +184,14 @@ export async function processSummaryJobs(
         [job.group_id, job.window_start, job.window_end],
       );
       const key = await accountKey(client, config, job.user_id);
+      const names = await loadSenderNames(client, job.user_id);
       const batch: BatchMessage[] = msgs.rows
         .map((m) => ({
           id: m.id as string,
           sender_ref: m.sender_ref as string | null,
-          sender_name: m.sender_name as string | null,
+          sender_name: names.nameFor(m.sender_ref as string | null, m.sender_name as string | null),
           sent_at: (m.sent_at as Date).toISOString(),
-          text: decrypt(m.body_ciphertext, key).trim(),
+          text: names.resolveMentions(decrypt(m.body_ciphertext, key).trim()),
         }))
         .filter((m) => m.text.length > 0);
 
