@@ -29,19 +29,30 @@ export type GroupView = {
 };
 
 // Groups are tenant-scoped through the session's owning user.
+//
+// A Group belongs to the Account, but the rows are keyed per Session
+// (UNIQUE (session_id, external_jid)), and re-pairing mints a new Session — so
+// the same WhatsApp Group can hold one row per Session the Account has ever
+// had. DISTINCT ON collapses those to the row that is actually live: the
+// connected Session first, then the newest. Counts are per Group rather than
+// per row for the same reason, so a stale copy can never inflate the cap.
 export async function listGroups(pool: pg.Pool, userId: string): Promise<GroupView[]> {
   const [{ rows }, plan] = await Promise.all([
     pool.query(
-      `SELECT g.id, g.external_jid, g.name, g.enabled,
-              sc.local_time, sc.timezone, sc.language,
-              (SELECT count(*)::int FROM groups o
-                 JOIN whatsapp_sessions os ON os.id = o.session_id
-                WHERE os.user_id = $1 AND o.enabled AND o.enabled_at < g.enabled_at)
-                AS enabled_before
-       FROM groups g
-       JOIN whatsapp_sessions s ON s.id = g.session_id
-       LEFT JOIN summary_schedules sc ON sc.group_id = g.id
-       WHERE s.user_id = $1
+      `SELECT * FROM (
+         SELECT DISTINCT ON (g.external_jid)
+                g.id, g.external_jid, g.name, g.enabled, g.created_at,
+                sc.local_time, sc.timezone, sc.language,
+                (SELECT count(DISTINCT o.external_jid)::int FROM groups o
+                   JOIN whatsapp_sessions os ON os.id = o.session_id
+                  WHERE os.user_id = $1 AND o.enabled AND o.enabled_at < g.enabled_at)
+                  AS enabled_before
+         FROM groups g
+         JOIN whatsapp_sessions s ON s.id = g.session_id
+         LEFT JOIN summary_schedules sc ON sc.group_id = g.id
+         WHERE s.user_id = $1
+         ORDER BY g.external_jid, (s.status = 'connected') DESC, s.created_at DESC
+       ) g
        ORDER BY g.created_at`,
       [userId],
     ),
@@ -175,6 +186,85 @@ export async function seedGroups(
     added += res.rowCount ?? 0;
   }
   return added;
+}
+
+// The state this Account last chose for each Group, taken from every Session
+// except the one named, newest first. Shared by adoptGroups and migration 024.
+const PRIOR_STATE = `
+  SELECT DISTINCT ON (g.external_jid)
+         g.id, g.external_jid, g.enabled, g.enabled_at
+    FROM groups g
+    JOIN whatsapp_sessions s ON s.id = g.session_id
+   WHERE s.user_id = $1 AND g.session_id <> $2
+   ORDER BY g.external_jid, g.enabled DESC, g.enabled_at DESC NULLS LAST, g.created_at DESC`;
+
+// A Group is the Account's, not the Session's. Re-pairing mints a new Session
+// and seedGroups refills it with everything disabled, which leaves the Account's
+// real choices stranded on the Session it just replaced: consumer.ts looks the
+// Group up by session_id, so those Groups read as enabled, still count against
+// the Plan cap, and are read by nothing. Carry the choice onto the live rows and
+// stand the superseded ones down, so what the screen says and what WALAO reads
+// are the same thing again.
+//
+// Nothing is deleted: messages and summaries hang off the old rows by
+// ON DELETE CASCADE, and a re-pair must not cost the Account its history.
+export async function adoptGroups(pool: pg.Pool, sessionExternalId: string): Promise<number> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const { rows } = await client.query(
+      `SELECT id, user_id FROM whatsapp_sessions WHERE external_session_id = $1`,
+      [sessionExternalId],
+    );
+    if (rows.length === 0) {
+      await client.query("ROLLBACK");
+      return 0;
+    }
+    const args = [rows[0].user_id, rows[0].id];
+
+    const adopted = await client.query(
+      `WITH prior AS (${PRIOR_STATE})
+       UPDATE groups g SET enabled = true, enabled_at = prior.enabled_at
+         FROM prior
+        WHERE g.session_id = $2 AND g.external_jid = prior.external_jid
+          AND prior.enabled AND NOT g.enabled`,
+      args,
+    );
+
+    // §31: the schedule is a property of the Group, so it follows the Group
+    // across a re-pair rather than dying with the Session it was set on.
+    await client.query(
+      `WITH prior AS (${PRIOR_STATE})
+       INSERT INTO summary_schedules (group_id, local_time, timezone, language)
+       SELECT live.id, sc.local_time, sc.timezone, sc.language
+         FROM prior
+         JOIN summary_schedules sc ON sc.group_id = prior.id
+         JOIN groups live ON live.session_id = $2 AND live.external_jid = prior.external_jid
+       ON CONFLICT (group_id) DO NOTHING`,
+      args,
+    );
+
+    // Only a Group the live Session actually carries is stood down. One that the
+    // gateway did not return this time keeps its state — a Group must not be
+    // silently disabled because WhatsApp omitted it from one listing.
+    await client.query(
+      `UPDATE groups g SET enabled = false
+         FROM whatsapp_sessions s
+        WHERE s.id = g.session_id AND s.user_id = $1
+          AND g.session_id <> $2 AND g.enabled
+          AND EXISTS (SELECT 1 FROM groups live
+                       WHERE live.session_id = $2 AND live.external_jid = g.external_jid)`,
+      args,
+    );
+
+    await client.query("COMMIT");
+    return adopted.rowCount ?? 0;
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
 // Backfill group titles. Discovery registers a group the first time a message

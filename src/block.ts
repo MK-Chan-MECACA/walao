@@ -70,7 +70,7 @@ export async function processingBlock(
             (SELECT count(*)::int FROM summaries
               WHERE user_id = u.id AND model <> 'none'
                 AND created_at >= date_trunc('day', now())) AS credits_today,
-            (SELECT count(*)::int FROM groups g
+            (SELECT count(DISTINCT g.external_jid)::int FROM groups g
                JOIN whatsapp_sessions s ON s.id = g.session_id
               WHERE s.user_id = u.id AND g.enabled
                 AND g.enabled_at < (SELECT enabled_at FROM groups WHERE id = $2)) AS enabled_before

@@ -92,7 +92,9 @@ export async function getUsage(pool: pg.Pool, userId: string): Promise<Usage> {
   const plan = await getPlan(pool, userId);
   const [groups, messages, credits, burn, trial] = await Promise.all([
     pool.query(
-      `SELECT count(*)::int AS n FROM groups g
+      // Per Group, not per row: re-pairing can leave more than one row for the
+      // same WhatsApp Group (see listGroups), and the cap counts Groups.
+      `SELECT count(DISTINCT g.external_jid)::int AS n FROM groups g
        JOIN whatsapp_sessions s ON s.id = g.session_id
        WHERE s.user_id = $1 AND g.enabled`,
       [userId],
