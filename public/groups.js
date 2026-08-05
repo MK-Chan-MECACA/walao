@@ -145,6 +145,13 @@ function render() {
 $("f-q").oninput = render;
 $("f-state").onchange = render;
 
+// A Community's announcement group and the Group it announces to carry the
+// same name, so the size is what tells two identical-looking rows apart — the
+// one with three members is the announcement, the one with hundreds is the
+// Group. Zero is the backfill's "the gateway stopped listing this one" stamp,
+// not a real count, so it is left off.
+const size = (g) => (g.members ? `${g.members} members · ` : "");
+
 function row(g) {
   const name = shown(g);
   const state = g.blocked ? "blocked" : g.enabled ? "enabled" : "off";
@@ -170,7 +177,7 @@ function row(g) {
       "div",
       { class: "grow" },
       el("strong", { text: name }),
-      el("span", { class: "muted", text: ` ${label}` }),
+      el("span", { class: "muted", text: ` ${size(g)}${label}` }),
     ),
     toggle,
     g.enabled ? scheduleForm(g) : null,

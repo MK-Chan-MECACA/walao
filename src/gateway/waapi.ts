@@ -187,7 +187,7 @@ export class WaapiGateway implements GatewayPort {
 
   async listGroups(
     externalSessionId: string,
-  ): Promise<Array<{ jid: string; name: string | null }>> {
+  ): Promise<Array<{ jid: string; name: string | null; members: number | null }>> {
     const rows = await this.call("GET", `/api/${externalSessionId}/groups`);
     if (!Array.isArray(rows)) throw new Error("waapi groups: expected array");
     return rows.map((r) => {
@@ -195,6 +195,9 @@ export class WaapiGateway implements GatewayPort {
       return {
         jid: str(g.jid, "jid"),
         name: typeof g.name === "string" && g.name.length > 0 ? g.name : null,
+        // WAAPI sends `members` on every listing. It is the only field that
+        // separates a Community's announcement group from the Group itself.
+        members: typeof g.members === "number" && g.members >= 0 ? g.members : null,
       };
     });
   }

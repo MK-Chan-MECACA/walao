@@ -118,12 +118,15 @@ export class FakeGateway implements GatewayPort {
 
   // Group titles the fake gateway will report, keyed by session id. Tests that
   // exercise the name backfill set this; everyone else gets an empty list.
-  groupNames: Record<string, Array<{ jid: string; name: string | null }>> = {};
+  groupNames: Record<string, Array<{ jid: string; name: string | null; members?: number }>> = {};
 
   async listGroups(
     sessionExternalId: string,
-  ): Promise<Array<{ jid: string; name: string | null }>> {
-    return this.groupNames[sessionExternalId] ?? [];
+  ): Promise<Array<{ jid: string; name: string | null; members: number | null }>> {
+    return (this.groupNames[sessionExternalId] ?? []).map((g) => ({
+      ...g,
+      members: g.members ?? null,
+    }));
   }
 }
 

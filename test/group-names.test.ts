@@ -1,7 +1,7 @@
 import { after, before, beforeEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { makeHarness, type Harness } from "./helpers.ts";
-import { backfillGroupNames } from "../src/subscriptions.ts";
+import { backfillGroupNames, listGroups, seedGroups } from "../src/subscriptions.ts";
 
 let h: Harness;
 
@@ -13,6 +13,11 @@ after(async () => {
 });
 beforeEach(async () => {
   await h.reset();
+  // Several tests stub listGroups to count calls or force a failure. That
+  // assignment shadows the class method on the shared fake for every test
+  // after it, so drop the own property and let the prototype answer again.
+  delete (h.gateway as Partial<Record<"listGroups", unknown>>).listGroups;
+  h.gateway.groupNames = {};
 });
 
 async function nameOf(groupId: string): Promise<string | null> {
@@ -89,6 +94,84 @@ describe("group name backfill", () => {
 
     assert.equal(await backfillGroupNames(h.pool, h.gateway), 0);
     assert.equal(await nameOf(g), null);
+  });
+
+  // A Community's announcement group and the Group it announces to carry the
+  // same name. The member count is the only thing that separates them, so it
+  // is a live fact: unlike the name, every listing refreshes it.
+  it("keeps the member count current so two same-named Groups stay tellable apart", async () => {
+    const userId = await h.seedUser("tok");
+    const sessionId = await h.seedSession(userId, "sess-1");
+    const announce = await h.seedGroup(sessionId, "ann@g.us");
+    const real = await h.seedGroup(sessionId, "real@g.us");
+    h.gateway.groupNames["sess-1"] = [
+      { jid: "ann@g.us", name: "LEAD Community", members: 5 },
+      { jid: "real@g.us", name: "LEAD Community", members: 1804 },
+    ];
+
+    await backfillGroupNames(h.pool, h.gateway);
+    const groups = await listGroups(h.pool, userId);
+    assert.deepEqual(
+      groups.map((g) => [g.name, g.members]).sort((a, b) => Number(a[1]) - Number(b[1])),
+      [
+        ["LEAD Community", 5],
+        ["LEAD Community", 1804],
+      ],
+      "both Groups survive, and the size is what distinguishes them",
+    );
+
+    // Once nothing on the session is missing, the session stops being polled at
+    // all — that is the 429 fix, and it means the count is a snapshot, not a
+    // live figure. seedGroups refreshes it on the next reconnect; the backfill
+    // deliberately does not keep asking.
+    h.gateway.groupNames["sess-1"] = [
+      { jid: "ann@g.us", name: "Renamed", members: 5 },
+      { jid: "real@g.us", name: "Renamed", members: 1900 },
+    ];
+    await backfillGroupNames(h.pool, h.gateway);
+    const after = await listGroups(h.pool, userId);
+    assert.equal(after.find((g) => g.id === real)?.members, 1804, "converged: no re-poll");
+    assert.equal(after.find((g) => g.id === real)?.name, "LEAD Community", "name is never rewritten");
+
+    // Reconnecting is what refreshes it, and the name still stays put.
+    await seedGroups(h.pool, h.gateway, "sess-1");
+    const seeded = await listGroups(h.pool, userId);
+    assert.equal(seeded.find((g) => g.id === real)?.members, 1900, "seed refreshes the count");
+    assert.equal(seeded.find((g) => g.id === announce)?.members, 5);
+    assert.equal(seeded.find((g) => g.id === real)?.name, "LEAD Community");
+  });
+
+  // The selection now also wakes on a NULL member count, so the convergence
+  // stamp has to settle that too — otherwise a group the gateway stopped
+  // listing keeps this session querying /groups forever, which is the exact
+  // loop WhatsApp answered with 429 rate-overlimit and a closed stream.
+  it("settles the member count too, so an unlisted group cannot re-open the 429 loop", async () => {
+    const userId = await h.seedUser("tok");
+    const sessionId = await h.seedSession(userId, "sess-1");
+    await h.seedGroup(sessionId, "gone@g.us");
+    h.gateway.groupNames["sess-1"] = [{ jid: "here@g.us", name: "Still Here", members: 12 }];
+
+    await backfillGroupNames(h.pool, h.gateway);
+
+    let calls = 0;
+    h.gateway.listGroups = () => {
+      calls += 1;
+      return Promise.resolve([]);
+    };
+    await backfillGroupNames(h.pool, h.gateway);
+    assert.equal(calls, 0, "the pass converged: nothing is left NULL to wake it");
+  });
+
+  // A row discovered from a message has no count until a listing is seen, and
+  // the screen must simply omit it rather than claim the Group is empty.
+  it("leaves the count null when the gateway never reported one", async () => {
+    const userId = await h.seedUser("tok");
+    const sessionId = await h.seedSession(userId, "sess-1");
+    await h.seedGroup(sessionId, "hhh@g.us");
+    h.gateway.groupNames["sess-1"] = [{ jid: "hhh@g.us", name: "No Count" }];
+
+    await backfillGroupNames(h.pool, h.gateway);
+    assert.equal((await listGroups(h.pool, userId))[0].members, null);
   });
 
   it("a failing gateway is skipped, not fatal", async () => {

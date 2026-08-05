@@ -20,6 +20,10 @@ export type GroupView = {
   id: string;
   external_jid: string;
   name: string | null;
+  // How many people are in it. A Community's announcement group and the Group
+  // it announces to carry the same name, so this is what tells the two rows
+  // apart on screen. Null until a gateway listing has been seen for it.
+  members: number | null;
   enabled: boolean;
   // Enabled but past the Plan's cap, so nothing from it is being read. The
   // rank test mirrors processingBlock's over_group_cap exactly (block.ts:76):
@@ -41,7 +45,7 @@ export async function listGroups(pool: pg.Pool, userId: string): Promise<GroupVi
     pool.query(
       `SELECT * FROM (
          SELECT DISTINCT ON (g.external_jid)
-                g.id, g.external_jid, g.name, g.enabled, g.created_at,
+                g.id, g.external_jid, g.name, g.members, g.enabled, g.created_at,
                 sc.local_time, sc.timezone, sc.language,
                 (SELECT count(DISTINCT o.external_jid)::int FROM groups o
                    JOIN whatsapp_sessions os ON os.id = o.session_id
@@ -62,6 +66,7 @@ export async function listGroups(pool: pg.Pool, userId: string): Promise<GroupVi
     id: r.id,
     external_jid: r.external_jid,
     name: r.name,
+    members: r.members,
     enabled: r.enabled,
     blocked: r.enabled && r.enabled_before >= PLANS[plan].max_groups,
     schedule: r.local_time
@@ -178,12 +183,17 @@ export async function seedGroups(
   for (const g of groups) {
     if (!g.jid.endsWith("@g.us")) continue; // status@broadcast and DMs are not Groups
     const res = await pool.query(
-      `INSERT INTO groups (session_id, external_jid, name)
-       SELECT id, $2, $3 FROM whatsapp_sessions WHERE external_session_id = $1
-       ON CONFLICT (session_id, external_jid) DO NOTHING`,
-      [sessionExternalId, g.jid, g.name],
+      `INSERT INTO groups (session_id, external_jid, name, members)
+       SELECT id, $2, $3, $4 FROM whatsapp_sessions WHERE external_session_id = $1
+       ON CONFLICT (session_id, external_jid)
+         DO UPDATE SET members = COALESCE(EXCLUDED.members, groups.members)
+       RETURNING (xmax = 0) AS inserted`,
+      [sessionExternalId, g.jid, g.name, g.members],
     );
-    added += res.rowCount ?? 0;
+    // DO UPDATE refreshes the count on a row that already existed, so rowCount
+    // is 1 either way — xmax distinguishes the insert, and "added" still means
+    // Groups this Session did not have before.
+    if (res.rows[0]?.inserted) added += 1;
   }
   return added;
 }
@@ -277,7 +287,7 @@ export async function backfillGroupNames(pool: pg.Pool, gateway: GatewayPort): P
     `SELECT DISTINCT s.external_session_id
      FROM groups g
      JOIN whatsapp_sessions s ON s.id = g.session_id
-     WHERE g.name IS NULL AND s.status = 'connected'`,
+     WHERE (g.name IS NULL OR g.members IS NULL) AND s.status = 'connected'`,
   );
 
   let named = 0;
@@ -289,18 +299,29 @@ export async function backfillGroupNames(pool: pg.Pool, gateway: GatewayPort): P
       continue; // gateway down or session gone: the next pass retries
     }
     for (const g of groups) {
-      if (!g.name) continue;
-      // Only ever fills a NULL — a name already stored is never overwritten.
+      if (g.name === null && g.members === null) continue;
+      // The name only ever fills a NULL — one already stored is never
+      // overwritten. The count is refreshed whenever a listing is in hand, but
+      // a session stops being listed once nothing on it is missing (the 429
+      // fix), so treat it as a snapshot: seedGroups re-takes it on reconnect.
+      // RETURNING reports the row after the write, so the CTE carries the one
+      // fact this needs from before it: whether a name was actually filled.
       const res = await pool.query(
-        `UPDATE groups SET name = $3
-         FROM whatsapp_sessions s
-         WHERE groups.session_id = s.id
-           AND s.external_session_id = $1
-           AND groups.external_jid = $2
-           AND groups.name IS NULL`,
-        [sessionExternalId, g.jid, g.name],
+        `WITH target AS (
+           SELECT g.id, g.name IS NULL AS was_unnamed
+             FROM groups g
+             JOIN whatsapp_sessions s ON s.id = g.session_id
+            WHERE s.external_session_id = $1 AND g.external_jid = $2
+         )
+         UPDATE groups g SET name = COALESCE(g.name, $3),
+                             members = COALESCE($4, g.members)
+           FROM target
+          WHERE g.id = target.id
+            AND (g.name IS NULL OR g.members IS DISTINCT FROM $4)
+         RETURNING target.was_unnamed`,
+        [sessionExternalId, g.jid, g.name, g.members],
       );
-      named += res.rowCount ?? 0;
+      if (g.name !== null) named += res.rows.filter((r) => r.was_unnamed).length;
     }
 
     // Converge. A jid the gateway does not return (left group, or a chat it no
@@ -311,13 +332,19 @@ export async function backfillGroupNames(pool: pg.Pool, gateway: GatewayPort): P
     // `name ?? external_jid`, so nothing looks different. Skipped when the
     // gateway returned nothing at all — an empty list is more likely a session
     // still warming up than proof every group is gone.
+    //
+    // members is stamped 0 for the same reason and nothing else: the selection
+    // above now also wakes on `members IS NULL`, so a leftover left unstamped
+    // would keep this session querying /groups forever and walk straight back
+    // into the 429. The UI omits a zero count rather than claiming "0 members".
     if (groups.length > 0) {
       await pool.query(
-        `UPDATE groups SET name = groups.external_jid
+        `UPDATE groups SET name = COALESCE(groups.name, groups.external_jid),
+                           members = COALESCE(groups.members, 0)
          FROM whatsapp_sessions s
          WHERE groups.session_id = s.id
            AND s.external_session_id = $1
-           AND groups.name IS NULL
+           AND (groups.name IS NULL OR groups.members IS NULL)
            AND groups.external_jid <> ALL($2::text[])`,
         [sessionExternalId, groups.map((g) => g.jid)],
       );

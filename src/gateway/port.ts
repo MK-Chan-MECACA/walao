@@ -50,8 +50,13 @@ export interface GatewayPort {
   // read one. Metadata only.
   sessionNumberSha256(externalSessionId: string): Promise<string | null>;
 
-  // Group titles for a session. Providers may not carry the chat name on
-  // message events (WAAPI does not), so discovery registers groups unnamed and
-  // names are backfilled from here. Metadata only — never message content.
-  listGroups(externalSessionId: string): Promise<Array<{ jid: string; name: string | null }>>;
+  // Group titles and sizes for a session. Providers may not carry the chat name
+  // on message events (WAAPI does not), so discovery registers groups unnamed
+  // and names are backfilled from here. The member count is what tells two
+  // same-named chats apart — a Community's announcement group and the Group it
+  // announces to share a name, and only their size differs.
+  // Metadata only — never message content.
+  listGroups(
+    externalSessionId: string,
+  ): Promise<Array<{ jid: string; name: string | null; members: number | null }>>;
 }
