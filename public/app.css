@@ -21,20 +21,24 @@
   --color-neutral-800: #3f424d;
   --color-neutral-900: #292b31;
 
-  /* The prototype rotates Nocturne's accent ramp to warm gold (OKLCH hue 83,
-     the triad partner of WhatsApp green) at 1.05x chroma. Same lightness steps,
-     so the documented contrast ratios survive the rotation. */
-  --color-accent: oklch(0.66 0.13125 83);
-  --color-accent-2: oklch(0.73 0.08925 83);
-  --color-accent-100: oklch(0.97 0.0189 83);
-  --color-accent-200: oklch(0.93 0.03675 83);
-  --color-accent-300: oklch(0.86 0.0735 83);
-  --color-accent-400: oklch(0.76 0.126 83);
-  --color-accent-500: oklch(0.66 0.13125 83);
-  --color-accent-600: oklch(0.56 0.12075 83);
-  --color-accent-700: oklch(0.46 0.09975 83);
-  --color-accent-800: oklch(0.37 0.07875 83);
-  --color-accent-900: oklch(0.29 0.05775 83);
+  /* Brand CI, 02 — Colour: one accent, and it is WhatsApp's own green #25D366
+     (OKLCH hue 152). WALAO sits on top of WhatsApp and should read as part of
+     it. The ramp is nine steps at that hue, chroma tracking lightness — highest
+     at 400–500, lowest at the ends. No second brand colour exists; amber below
+     is status, not brand. Do not invent an intermediate step: use the nearest.
+     Values are the CI deck's own :root, which is the source this file follows.
+     Colour changes here first, then in the deck — never the other way round. */
+  --color-accent: oklch(0.766 0.176 152);
+  --color-accent-2: oklch(0.86 0.12 152);
+  --color-accent-100: oklch(0.97 0.028 152);
+  --color-accent-200: oklch(0.93 0.055 152);
+  --color-accent-300: oklch(0.88 0.105 152);
+  --color-accent-400: oklch(0.83 0.145 152);
+  --color-accent-500: oklch(0.766 0.176 152);
+  --color-accent-600: oklch(0.66 0.155 152);
+  --color-accent-700: oklch(0.55 0.125 152);
+  --color-accent-800: oklch(0.44 0.098 152);
+  --color-accent-900: oklch(0.33 0.068 152);
 
   /* Blocked / partial / destructive ground — one amber pair, used for the
      status banner, the coverage-gap line, an over-cap row and the delete
@@ -184,11 +188,15 @@ a:hover {
   color: var(--color-accent);
 }
 
+/* Brand CI, 02 — Logo: the wordmark is set, not drawn. Inter 600, -0.035em,
+   all caps. text-transform is here so "Walao" typed into the markup still comes
+   out as the wordmark rather than as a misuse. */
 .nav-brand {
   font-family: var(--font-heading);
   font-weight: 600;
   font-size: 17px;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.035em;
+  text-transform: uppercase;
   padding: 0 var(--space-4) var(--space-4);
 }
 
@@ -696,12 +704,23 @@ main.auth {
   padding-top: 22.4px;
 }
 
+/* Lockup A again, centred as a unit. Not the stacked lockup: the CI forbids
+   centring the mark over the wordmark. */
 main.auth > h1 {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
   font-size: 32px;
   font-weight: 600;
-  letter-spacing: -0.03em;
-  text-align: center;
+  letter-spacing: -0.035em;
+  text-transform: uppercase;
   margin-top: var(--space-8);
+}
+
+main.auth > h1 img {
+  width: 50px;
+  height: 50px;
 }
 
 main.auth > h1 + p {
@@ -731,13 +750,28 @@ main.auth > h1 + p {
   border-bottom: 1px solid var(--color-divider);
 }
 
+/* Lockup A — horizontal: mark then wordmark, gap one bar height. */
 .site-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
   font-family: var(--font-heading);
   font-weight: 600;
   font-size: 20px;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.035em;
+  text-transform: uppercase;
   color: var(--color-text);
   margin-right: auto;
+}
+
+/* Mark size and gap follow the proportions the CI deck's lockup A is drawn at:
+   the tile is ~1.55x the wordmark's font-size and the gap is ~0.26x the tile.
+   (The deck's prose says "cap height x 1.6" and "one bar height", which its own
+   artwork does not follow — the drawn proportions are the ones anyone has
+   actually looked at.) Clear space around the lockup is the header padding. */
+.site-brand img {
+  width: 30px;
+  height: 30px;
 }
 
 .site-brand:hover {

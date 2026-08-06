@@ -1,5 +1,16 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="WALAO">
-  <rect width="32" height="32" rx="7" fill="#1b1d2c" />
-  <path d="M6 10l3.2 12h2.6L16 13.6 20.2 22h2.6L26 10h-2.8l-2.1 8.3L17.3 10h-2.6l-3.8 8.3L8.8 10z"
-        fill="#d9a441" />
+<!-- The Reduction mark (Brand CI, 02 — Logo, lockup C): three bars, each shorter
+     than the last — a group of messages entering, one line leaving.
+
+     Construction is the CI's 20-unit square, so the viewBox is the spec:
+     tile 20u with a 3u radius (15%), 4u inset each side, bars 1u high with a
+     0.5u radius, 2u apart, widths 12u / 7.7u / 3.6u (100% / 64% / 30% of the
+     12u inner width). Only two colours ever touch: the accent tile and the
+     ground bars. This one file is the mark everywhere it appears — the tab
+     icon and the site header both point at it, so there is nothing to keep
+     in sync. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" role="img" aria-label="WALAO">
+  <rect width="20" height="20" rx="3" fill="#25D366" />
+  <rect x="4" y="6.5" width="12" height="1" rx="0.5" fill="#161826" />
+  <rect x="4" y="9.5" width="7.7" height="1" rx="0.5" fill="#161826" />
+  <rect x="4" y="12.5" width="3.6" height="1" rx="0.5" fill="#161826" />
 </svg>
