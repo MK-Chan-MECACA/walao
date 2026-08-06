@@ -605,11 +605,21 @@ a {
 
 /* The explainer's frame. The canvas fills the inner plate, so the sequence's
    own vignette meets the plate's edge with nothing between them. */
+/* .core is a flex column for text panels; the stage holds one canvas that must
+   fill it exactly, so it goes back to being a plain block.
+
+   No aspect-ratio here on purpose. .core is height:100%, and an aspect-ratio on
+   a box whose height is already decided by the grid row computes a *width* from
+   that height — which came out wider than the column and pushed the canvas out
+   from under its own tray. The stage takes the row's height and the column's
+   width; only the single-column layout below needs a ratio to have a height at
+   all. */
 .stage {
   position: relative;
+  display: block;
   padding: 0;
   overflow: hidden;
-  aspect-ratio: 4 / 5;
+  min-height: 420px;
   background: #050505;
 }
 
@@ -899,6 +909,7 @@ a {
 }
 
 .frame .core {
+  display: block;
   padding: 0;
   overflow: hidden;
   background: #050505;
@@ -960,6 +971,8 @@ a {
   }
 
   .stage {
+    height: auto;
+    min-height: 0;
     aspect-ratio: 3 / 4;
   }
 

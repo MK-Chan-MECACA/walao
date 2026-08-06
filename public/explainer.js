@@ -858,12 +858,18 @@ export function mountExplainer(canvas, options = {}) {
   let viewW = CORE_W;
   let viewH = CORE_H;
 
+  /* Measure the frame, not the canvas. `setSize` with updateStyle writes an
+     inline width/height onto the canvas, which then outranks the stylesheet's
+     100% — the canvas stops following its frame and the two drift apart. So the
+     buffer is sized here and the box stays entirely CSS's business. */
+  const host = canvas.parentElement ?? canvas;
+
   function resize() {
     const dpr = Math.min(window.devicePixelRatio || 1, fixed ? 1 : 2);
-    const width = fixed ? fixed.width : Math.max(1, canvas.clientWidth);
-    const height = fixed ? fixed.height : Math.max(1, canvas.clientHeight);
+    const width = fixed ? fixed.width : Math.max(1, host.clientWidth);
+    const height = fixed ? fixed.height : Math.max(1, host.clientHeight);
     renderer.setPixelRatio(dpr);
-    renderer.setSize(width, height, !fixed);
+    renderer.setSize(width, height, false);
 
     /* Contain the core box: whichever axis is tight decides the scale, and the
        other simply shows more ground. */
@@ -881,7 +887,7 @@ export function mountExplainer(canvas, options = {}) {
   }
 
   const observer = new ResizeObserver(resize);
-  if (!fixed) observer.observe(canvas);
+  if (!fixed) observer.observe(host);
   resize();
 
   function draw(t) {
