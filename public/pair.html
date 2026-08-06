@@ -16,39 +16,44 @@
     <header id="chrome"></header>
     <main>
       <h1>Connection</h1>
-      <p id="trial" class="muted"></p>
+      <p id="error" class="error" hidden></p>
 
-      <section class="card" id="pair-box">
-        <h2>Before you pair</h2>
-        <!-- §12: the ban-risk wording is served by GET /v1/onboarding and the
-             button stays inert until it is affirmed — a decision, not a scroll-past. -->
-        <div class="terms">
-          <span class="muted" id="disclosure-version"></span>
-          <p id="disclosure-text">Loading…</p>
-          <label class="check">
-            <input type="checkbox" id="disclosure-ok" />
-            <span>I have read this and accept the risk.</span>
-          </label>
+      <!-- Dashboard, 2a — live banner: one compact card confirming the link is up,
+           shown only while a connected session exists. -->
+      <section class="card" id="live-banner" hidden>
+        <div class="live-row">
+          <span class="dot on"></span>
+          <p>Connected. WALAO is reading the Groups you enable.</p>
+          <p id="live-since" class="mono muted"></p>
         </div>
-        <button id="pair" disabled>Pair WhatsApp</button>
-        <p id="error" class="error" hidden></p>
       </section>
 
-      <section class="card" id="code-box" hidden>
-        <h2>Scan to pair</h2>
-        <div id="qr-code"></div>
-        <p class="muted">
-          In WhatsApp on your phone: <strong>Settings → Linked devices → Link a device</strong>,
-          then scan this QR code. It expires in a few minutes.
-        </p>
-        <p id="waiting" class="muted">Waiting for WhatsApp to confirm…</p>
-      </section>
-
-      <section class="card">
-        <h2>Connection history</h2>
+      <section class="card" id="sessions-card">
+        <h3>Sessions</h3>
         <ul class="rows" id="connections">
           <li class="muted">Loading…</li>
         </ul>
+      </section>
+
+      <!-- Dashboard, 2a — pairing: disclosure text on the left, QR on the right.
+           When a session is live the disclosure collapses behind the connected
+           state and the QR is absent; it re-appears for pairing another number. -->
+      <section class="card" id="pair-box">
+        <h3>Pair another number <span class="muted" style="text-transform:none;letter-spacing:0" id="disclosure-version"></span></h3>
+        <div class="pair-grid">
+          <div class="pair-left">
+            <p id="disclosure-text">Loading…</p>
+            <label class="check">
+              <input type="checkbox" id="disclosure-ok" />
+              <span>I understand and accept the risk.</span>
+            </label>
+            <button id="pair" disabled>Show pairing code</button>
+          </div>
+          <div class="pair-right" id="code-box" hidden>
+            <div id="qr-code"></div>
+            <p id="waiting" class="mono muted">EXPIRES IN 60S</p>
+          </div>
+        </div>
       </section>
     </main>
 

@@ -44,9 +44,13 @@
       </section>
 
       <section class="card">
-        <h2>Processing</h2>
-        <p id="pause-line" class="muted">Loading…</p>
-        <button id="pause" class="secondary" hidden>Pause</button>
+        <div class="action-row">
+          <div>
+            <p id="pause-line">Loading…</p>
+            <p id="pause-hint" class="muted">Pausing stops ingestion and summarising immediately. It is reversible.</p>
+          </div>
+          <button id="pause" class="secondary" hidden>Pause</button>
+        </div>
       </section>
 
       <section class="card">

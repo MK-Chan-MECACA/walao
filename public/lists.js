@@ -4,7 +4,18 @@ import { citations, el, fmtDate, mount } from "/layout.js";
 const $ = (id) => document.getElementById(id);
 
 await mount("/lists");
+loadPlan();
 load();
+
+async function loadPlan() {
+  try {
+    const usage = await api("GET", "/v1/usage");
+    const name = usage.plan.charAt(0).toUpperCase() + usage.plan.slice(1);
+    $("plan-line").textContent = `${name} Plan. Reminders you confirmed. Memories you have saved.`;
+  } catch {
+    /* the status banner already reports a broken session */
+  }
+}
 
 function fail(err) {
   $("error").textContent = message(err);

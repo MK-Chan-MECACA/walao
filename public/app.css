@@ -407,6 +407,29 @@ a:hover {
   max-width: 22rem;
 }
 
+/* Dashboard, 2a — Settings: an action row is a description on the left, a
+   single button on the right, both on one line. Used for pause/resume and
+   other reversible single-action controls. */
+.action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  align-items: center;
+}
+
+.action-row > div {
+  flex: 1 1 22rem;
+  min-width: 0;
+}
+
+.action-row > div p {
+  margin: 0;
+}
+
+.action-row > div p + p {
+  margin-top: 5px;
+}
+
 /* Buttons — plain <button> is the primary action, .secondary the quiet one,
    .link the ghost. A .secondary that is a toggle fills in when it is on. */
 button {
@@ -742,6 +765,16 @@ li.blocked .muted {
   opacity: 0.75;
 }
 
+/* Dashboard, 2a — Connection: past (disconnected) sessions are dimmed but
+   still readable, so the active one is the first thing you see. */
+li.past {
+  opacity: 0.65;
+}
+
+strong.accent {
+  color: var(--color-accent);
+}
+
 .actions {
   display: flex;
   gap: var(--space-2);
@@ -1072,6 +1105,81 @@ details[open] > summary::before {
 #qr-code img {
   width: 196px;
   height: 196px;
+}
+
+/* Dashboard, 2a — Connection: a live-status banner row sits above the session
+   list. Green dot + one sentence + timestamp, all on one line. */
+.live-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.live-row .dot {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--color-accent);
+}
+
+.live-row p {
+  margin: 0;
+  font-size: 14px;
+}
+
+.live-row .mono {
+  margin-left: auto;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+/* Dashboard, 2a — Pair another number: disclosure on the left, QR placeholder
+   on the right. The grid collapses below 640px so the QR never crowds the text. */
+.pair-grid {
+  display: flex;
+  gap: 22px;
+  align-items: flex-start;
+}
+
+.pair-left {
+  flex: 1 1 22rem;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.pair-right {
+  width: 172px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.pair-right #qr-code {
+  width: 172px;
+  height: 172px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pair-right #qr-code img {
+  width: 148px;
+  height: 148px;
+}
+
+@media (max-width: 640px) {
+  .pair-grid {
+    flex-direction: column;
+  }
+
+  .pair-right {
+    width: 100%;
+  }
 }
 
 /* Sign-in is the one screen with no nav: a centred column with the wordmark. */
