@@ -3,56 +3,164 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>WALAO — sign in</title>
+    <title>WALAO — understand every important WhatsApp group in one minute a day</title>
+    <meta
+      name="description"
+      content="WALAO summarises the WhatsApp groups you choose into one short daily brief — decisions, actions and dates, every claim linked to the message it came from."
+    />
     <link rel="icon" href="/favicon.svg" />
     <link rel="stylesheet" href="/app.css" />
   </head>
   <body>
-    <main class="auth">
-      <h1>WALAO</h1>
-      <p class="muted">Your WhatsApp groups, summarised. One brief a day, every claim sourced.</p>
+    <!-- Marketing pages carry their nav and footer as plain markup rather than
+         mounting layout.js: that module fetches /v1/status, which 401s for a
+         visitor and would bounce them straight back off the page. Static markup
+         also means the copy is in the HTML a crawler reads. -->
+    <header class="site-head">
+      <a class="site-brand" href="/" aria-current="page">WALAO</a>
+      <nav class="site-nav">
+        <a href="/features">Features</a>
+        <a href="/pricing">Pricing</a>
+        <a href="/security">Privacy</a>
+        <a class="btn" href="/signin">Sign in</a>
+      </nav>
+    </header>
 
-      <p id="notice" class="notice" hidden></p>
+    <main class="site">
+      <section class="site-hero">
+        <h1>Understand every important group in one minute a day.</h1>
+        <p>
+          WhatsApp handles the conversation. WALAO handles the understanding. It reads only the
+          groups you switch on, then gives you one short brief a day — decisions, things waiting on
+          you, and the dates that were agreed while you were busy.
+        </p>
+        <p class="site-actions">
+          <a class="btn" href="/signin">Sign up</a>
+          <a class="btn ghost" href="/features">See what it does</a>
+        </p>
+      </section>
 
-      <section class="card">
-        <div class="tabs">
-          <button type="button" id="tab-signup" aria-pressed="true">Sign up</button>
-          <button type="button" id="tab-login" aria-pressed="false">Log in</button>
+      <section class="site-section">
+        <h2>Notifications say something is new. They don't say whether it deserves you.</h2>
+        <p class="muted">
+          A busy group produces far more messages than outcomes. What you actually need is the
+          answer to five questions:
+        </p>
+        <ul class="site-list">
+          <li>What was decided today?</li>
+          <li>What is waiting on my reply?</li>
+          <li>Which meetings, payments and deadlines were mentioned?</li>
+          <li>What matters, but not right now?</li>
+          <li>Can I find an old decision without scrolling through hundreds of messages?</li>
+        </ul>
+      </section>
+
+      <section class="site-section">
+        <h2>How it works</h2>
+        <ol class="site-grid">
+          <li class="card">
+            <h3>Step one</h3>
+            <strong>Connect a number</strong>
+            <p>
+              Pair WhatsApp by scanning a QR code, the same way WhatsApp Web works. Use a spare
+              number — see the note below.
+            </p>
+          </li>
+          <li class="card">
+            <h3>Step two</h3>
+            <strong>Choose the groups</strong>
+            <p>
+              Every group starts switched off. WALAO only ever receives new messages from the
+              groups you enable, and you can turn one off again at any time.
+            </p>
+          </li>
+          <li class="card">
+            <h3>Step three</h3>
+            <strong>Read one brief</strong>
+            <p>
+              At the time and timezone you pick, each group is summarised and the results merge
+              into a single Today Brief. Ask follow-up questions in your own words.
+            </p>
+          </li>
+        </ol>
+      </section>
+
+      <section class="site-section">
+        <h2>What a brief looks like</h2>
+        <div class="brief-demo">
+          <p class="brief-title">Good morning — 5 things worth your time today</p>
+
+          <h3>Needs you (2)</h3>
+          <ul>
+            <li>Confirm the supplier meeting, Friday 3:00 PM <span class="chip">Procurement</span></li>
+            <li>Reply on whether the final quote is approved <span class="chip">Sales MY</span></li>
+          </ul>
+
+          <h3>Decided (2)</h3>
+          <ul>
+            <li>Packaging moves to option B <span class="chip">Product</span></li>
+            <li>Launch date moves to 12 August <span class="chip">Launch</span></li>
+          </ul>
+
+          <h3>Worth noting (1)</h3>
+          <ul>
+            <li>A customer says the login flow is too long <span class="chip">Support</span></li>
+          </ul>
         </div>
+        <p class="muted">
+          Every line opens to the messages it was drawn from. When a group has nothing worth
+          reporting, WALAO says so instead of padding the brief.
+        </p>
+      </section>
 
-        <form id="form-email">
-          <label for="email">Email address</label>
-          <input id="email" type="email" required autocomplete="email" />
+      <section class="site-section">
+        <h2>Built to hold less of your data, not more</h2>
+        <ul class="site-grid">
+          <li class="card">
+            <strong>Sourced, not asserted</strong>
+            <p>Every claim carries the group, the time and the message it came from.</p>
+          </li>
+          <li class="card">
+            <strong>Off by default</strong>
+            <p>A group is not processed until you enable it, one at a time, on purpose.</p>
+          </li>
+          <li class="card">
+            <strong>You set the retention</strong>
+            <p>Raw messages are deleted after 1 to 30 days — whichever you choose.</p>
+          </li>
+          <li class="card">
+            <strong>Export or delete</strong>
+            <p>Take everything with you, or remove it all. Both leave an audit record.</p>
+          </li>
+        </ul>
+      </section>
 
-          <!-- §8 and §11: the wording is served by GET /v1/terms and readable
-               before an Account exists, on the same screen that accepts it. -->
-          <div class="terms" id="terms-box">
-            <strong>Data-processing terms</strong> <span class="muted" id="terms-version"></span>
-            <p id="terms-text">Loading…</p>
-            <label class="check">
-              <input type="checkbox" id="terms-ok" />
-              <span>I have read and accept these terms.</span>
-            </label>
-          </div>
-
-          <button type="submit" id="send-code">Email me a code</button>
-        </form>
-
-        <form id="form-code" hidden>
-          <p>We sent a code to <strong id="code-email"></strong>.</p>
-          <label for="code">Code</label>
-          <input id="code" type="text" inputmode="numeric" autocomplete="one-time-code" required />
-          <button type="submit">Verify</button>
-          <button type="button" class="link" id="back">Use a different email</button>
-          <p class="muted">
-            No mail is sent in development — the code is printed to the server log.
-          </p>
-        </form>
-
-        <p id="error" class="error" hidden></p>
+      <section class="site-section">
+        <p class="notice">
+          <strong>WALAO is in private beta.</strong> It connects to WhatsApp through an unofficial
+          gateway, which may breach WhatsApp's Terms of Service and can lead to an account being
+          suspended. Pair a spare number, not the one your business runs on. Group content is
+          processed by a third-party AI model. The full picture is on
+          <a href="/security">Privacy &amp; security</a>.
+        </p>
+        <p class="site-actions">
+          <a class="btn" href="/signin">Sign up</a>
+          <a class="btn ghost" href="/pricing">See the plans</a>
+        </p>
       </section>
     </main>
 
-    <script type="module" src="/index.js"></script>
+    <footer class="site-foot">
+      <p><strong>WALAO</strong> — WhatsApp AI Life Assistant and Organizer.</p>
+      <nav>
+        <a href="/features">Features</a>
+        <a href="/pricing">Pricing</a>
+        <a href="/security">Privacy &amp; security</a>
+        <a href="/signin">Sign in</a>
+      </nav>
+      <p class="muted">
+        WALAO is not affiliated with or endorsed by WhatsApp or Meta.
+      </p>
+    </footer>
   </body>
 </html>

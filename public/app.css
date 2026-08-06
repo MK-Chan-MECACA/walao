@@ -711,3 +711,235 @@ main.auth > h1 + p {
 [hidden] {
   display: none !important;
 }
+
+/* ---------------------------------------------------------------------------
+   Marketing site — /, /features, /pricing, /security.
+
+   These pages run no JavaScript at all, so everything here is layout on static
+   markup. They reuse the tokens, .card, .chip and .notice above rather than
+   introducing a second palette; the only genuinely new things are a header that
+   is not the app's fixed rail, wider display type for a hero, and .btn, which is
+   the <button> look on an <a> (a link that navigates must stay a link).
+   --------------------------------------------------------------------------- */
+
+.site-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4);
+  padding-bottom: var(--space-6);
+  border-bottom: 1px solid var(--color-divider);
+}
+
+.site-brand {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 20px;
+  letter-spacing: -0.02em;
+  color: var(--color-text);
+  margin-right: auto;
+}
+
+.site-brand:hover {
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+.site-nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.site-nav a {
+  color: inherit;
+  font-size: 14px;
+  padding: 7px var(--space-4);
+  border-radius: var(--radius-md);
+}
+
+.site-nav a:hover {
+  color: var(--color-text);
+  text-decoration: none;
+  background: color-mix(in srgb, var(--color-text) 7%, transparent);
+}
+
+.site-nav a[aria-current="page"] {
+  color: var(--color-accent);
+}
+
+/* .btn is <button>'s ruleset on an anchor. Kept as a separate block instead of
+   folded into the button selector so an app page can never accidentally style a
+   link like a control it isn't. */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-heading);
+  font-weight: 500;
+  font-size: 13px;
+  line-height: 1.2;
+  padding: var(--space-3) var(--space-6);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-accent);
+  color: var(--color-accent);
+}
+
+.btn:hover {
+  color: var(--color-accent);
+  text-decoration: none;
+  background: color-mix(in srgb, var(--color-accent) 12%, transparent);
+}
+
+.site-nav .btn {
+  padding: 7px var(--space-4);
+}
+
+.btn.ghost {
+  border-color: var(--color-divider);
+  color: var(--color-text);
+}
+
+.btn.ghost:hover {
+  color: var(--color-text);
+  background: color-mix(in srgb, var(--color-text) 7%, transparent);
+}
+
+main.site > section {
+  margin-bottom: 44.8px;
+}
+
+.site-hero {
+  padding: 44.8px 0 var(--space-8);
+  max-width: 34em;
+}
+
+.site-hero h1 {
+  font-size: 34px;
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -0.025em;
+  margin-bottom: var(--space-6);
+}
+
+/* The app's `h1 + p` is a 13px meta line. A hero's second line is the pitch. */
+.site-hero h1 + p {
+  font-size: 16px;
+  color: color-mix(in srgb, var(--color-text) 78%, transparent);
+  margin-bottom: var(--space-8);
+}
+
+.site-section > h2 {
+  font-size: 22px;
+  letter-spacing: -0.015em;
+  margin-bottom: var(--space-6);
+  max-width: 30em;
+}
+
+.site-section > p {
+  max-width: 34em;
+}
+
+.site-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin: var(--space-6) 0 0;
+}
+
+.site-list {
+  margin: 0 0 var(--space-3);
+  padding-left: var(--space-8);
+  max-width: 34em;
+}
+
+.site-list li {
+  margin-bottom: var(--space-2);
+}
+
+.site-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(238px, 1fr));
+  gap: var(--space-6);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* A .card carries its own bottom margin for the app's stacked screens; inside a
+   grid the gap already does that job. */
+.site-grid .card {
+  margin: 0;
+  gap: var(--space-2);
+}
+
+.site-grid .card .site-list {
+  padding-left: var(--space-6);
+  font-size: 13px;
+}
+
+/* The sample brief on the home page: the shape of a real Today Brief, so the
+   promise and the product look like the same thing. */
+.brief-demo {
+  background: var(--color-surface);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  padding: var(--space-8);
+  max-width: 34em;
+}
+
+.brief-title {
+  font-family: var(--font-heading);
+  font-weight: 500;
+  font-size: 17px;
+  margin-bottom: var(--space-6);
+}
+
+.brief-demo h3 {
+  color: var(--color-accent);
+  margin-top: var(--space-6);
+}
+
+.brief-demo ul {
+  margin: var(--space-2) 0 0;
+  padding-left: var(--space-8);
+  font-size: 14px;
+}
+
+.brief-demo li {
+  margin-bottom: var(--space-2);
+}
+
+.brief-demo .chip {
+  margin-left: var(--space-2);
+}
+
+body > footer {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: var(--space-8) var(--space-8) 44.8px;
+  border-top: 1px solid var(--color-divider);
+  font-size: 13px;
+}
+
+.site-foot nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-6);
+  margin-bottom: var(--space-4);
+}
+
+@media (max-width: 859px) {
+  body > footer {
+    padding-inline: var(--space-6);
+  }
+
+  .site-hero {
+    padding-top: var(--space-8);
+  }
+
+  .site-hero h1 {
+    font-size: 27px;
+  }
+}

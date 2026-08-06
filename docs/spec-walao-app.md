@@ -15,7 +15,7 @@ The v2 spec names "the app" eleven times as the surface for history, settings an
 
 ## Solution
 
-A mobile-first web app, served same-origin by the existing Node process from `public/`, with no build step: plain HTML, ES modules, one hand-written stylesheet. Eight pages, one per job — auth, pair, today, groups, lists, ask, settings, and an Operator page at `/ops`. The browser does the routing; the server adds a static branch and a path-traversal guard.
+A mobile-first web app, served same-origin by the existing Node process from `public/`, with no build step: plain HTML, ES modules, one hand-written stylesheet. Eight pages, one per job — auth, pair, today, groups, lists, ask, settings, and an Operator page at `/ops`. (A four-page marketing site at `/`, `/features`, `/pricing` and `/security` was added afterwards; it is static, runs no JavaScript, and moved auth to `/signin`.) The browser does the routing; the server adds a static branch and a path-traversal guard.
 
 Authentication moves from a bearer token pasted by a developer to an httpOnly cookie set at verification, because the app runs in a browser and the token it holds is non-expiring and, until now, non-revocable. A `POST /v1/logout` makes it revocable. The bearer header keeps working unchanged, so tests and API clients are untouched.
 
@@ -116,8 +116,8 @@ Three backend gaps block the surface and are filled here: `AnswererPort` has no 
 
 - Mobile-first web app, served **same origin** by the existing `node:http` server from `public/`. No second deploy target, no CORS, no cross-host credential.
 - **No build step.** Plain HTML, native ES modules, one hand-written `public/app.css`. Nothing from a CDN; every asset is local.
-- **Multi-page, not SPA.** The browser owns routing, history, the back button and scroll restoration. Pages: `index.html` (auth), `pair.html`, `today.html`, `groups.html`, `lists.html`, `ask.html`, `settings.html`, `ops.html`.
-- Static branch in `app.ts` resolves `GET /` → `index.html` and `GET /foo` → `public/foo.html`, falling through to the existing 404. Path resolution is `path.resolve` against `public/` with a prefix check — a request that escapes the directory is a 404, not a file. This is input validation at a trust boundary and is not simplified away.
+- **Multi-page, not SPA.** The browser owns routing, history, the back button and scroll restoration. App pages: `signin.html` (auth), `pair.html`, `today.html`, `groups.html`, `lists.html`, `ask.html`, `settings.html`, `ops.html`. Marketing pages, added later and outside this spec's original scope: `index.html` (home), `features.html`, `pricing.html`, `security.html` — static, JS-free, and deliberately not calling `layout.js` (`mount()` fetches `/v1/status`, which 401s for a visitor and would bounce them off the page).
+- Static branch in `app.ts` resolves `GET /` → `index.html` (the marketing home) and `GET /foo` → `public/foo.html`, falling through to the existing 404. Path resolution is `path.resolve` against `public/` with a prefix check — a request that escapes the directory is a 404, not a file. This is input validation at a trust boundary and is not simplified away.
 - English-only chrome. Per-Group Summary language (`zh | en | ms`) is unchanged and unrelated.
 - Styling is one stylesheet, ~200 lines: CSS custom properties for the palette, `prefers-color-scheme` for dark, system font stack, no framework.
 
@@ -127,7 +127,7 @@ Three backend gaps block the surface and are filled here: `AnswererPort` has no 
 - `authenticate()` reads the bearer header first and falls back to the cookie. Existing clients and all 129 tests are unaffected.
 - `SameSite=Lax` plus same-origin JSON writes covers CSRF: every mutating route is `POST`/`PUT`/`DELETE` with a JSON body, which no cross-site form can forge.
 - New `POST /v1/logout`: clears the cookie and sets `api_token_sha256` to NULL, so the token is dead rather than merely forgotten. Authenticated route — logging out is an Account action.
-- **One live token per Account** stays the model. `verify()` overwrites `api_token_sha256`, so a second device logs the first out. The app treats any 401 as "session ended": clear local state, redirect to `index.html` with an explanatory line. A `api_tokens` table for multi-device is a later ticket and a contained one — new table, `authenticate()` joins it, `verify()` inserts, `logout` deletes one row.
+- **One live token per Account** stays the model. `verify()` overwrites `api_token_sha256`, so a second device logs the first out. The app treats any 401 as "session ended": clear local state, redirect to `/signin?expired=1` with an explanatory line. A `api_tokens` table for multi-device is a later ticket and a contained one — new table, `authenticate()` joins it, `verify()` inserts, `logout` deletes one row.
 - The shared `api.js` helper wraps `fetch` with `credentials: 'same-origin'`, JSON encode/decode, and central 401 handling, so no page reimplements session expiry.
 
 ### Screens and the routes behind them

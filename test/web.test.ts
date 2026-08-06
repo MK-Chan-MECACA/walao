@@ -182,6 +182,10 @@ test("the app's own assets are served with the content types a browser needs", a
   // wrong MIME on a module is a blank page, and nothing else would catch it.
   for (const [path, type] of [
     ["/", /^text\/html/],
+    ["/features", /^text\/html/],
+    ["/pricing", /^text\/html/],
+    ["/security", /^text\/html/],
+    ["/signin", /^text\/html/],
     ["/pair", /^text\/html/],
     ["/today", /^text\/html/],
     ["/groups", /^text\/html/],

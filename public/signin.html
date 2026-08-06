@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>WALAO — sign in</title>
+    <link rel="icon" href="/favicon.svg" />
+    <link rel="stylesheet" href="/app.css" />
+  </head>
+  <body>
+    <main class="auth">
+      <h1>WALAO</h1>
+      <p class="muted">Your WhatsApp groups, summarised. One brief a day, every claim sourced.</p>
+
+      <p id="notice" class="notice" hidden></p>
+
+      <section class="card">
+        <div class="tabs">
+          <button type="button" id="tab-signup" aria-pressed="true">Sign up</button>
+          <button type="button" id="tab-login" aria-pressed="false">Log in</button>
+        </div>
+
+        <form id="form-email">
+          <label for="email">Email address</label>
+          <input id="email" type="email" required autocomplete="email" />
+
+          <!-- §8 and §11: the wording is served by GET /v1/terms and readable
+               before an Account exists, on the same screen that accepts it. -->
+          <div class="terms" id="terms-box">
+            <strong>Data-processing terms</strong> <span class="muted" id="terms-version"></span>
+            <p id="terms-text">Loading…</p>
+            <label class="check">
+              <input type="checkbox" id="terms-ok" />
+              <span>I have read and accept these terms.</span>
+            </label>
+          </div>
+
+          <button type="submit" id="send-code">Email me a code</button>
+        </form>
+
+        <form id="form-code" hidden>
+          <p>We sent a code to <strong id="code-email"></strong>.</p>
+          <label for="code">Code</label>
+          <input id="code" type="text" inputmode="numeric" autocomplete="one-time-code" required />
+          <button type="submit">Verify</button>
+          <button type="button" class="link" id="back">Use a different email</button>
+          <p class="muted">
+            No mail is sent in development — the code is printed to the server log.
+          </p>
+        </form>
+
+        <p id="error" class="error" hidden></p>
+      </section>
+    </main>
+
+    <script type="module" src="/signin.js"></script>
+  </body>
+</html>

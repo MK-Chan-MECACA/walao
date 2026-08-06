@@ -32,7 +32,7 @@ export async function api(method, path, body) {
   // else. Every page treats it the same way: back to the login screen with a
   // line saying why, rather than a screenful of failed panels.
   if (res.status === 401 && !ownsIts401()) {
-    location.replace("/?expired=1");
+    location.replace("/signin?expired=1");
     throw new ApiError("session_ended", 401, data);
   }
   if (!res.ok) throw new ApiError(data?.error ?? `http_${res.status}`, res.status, data);
@@ -42,7 +42,7 @@ export async function api(method, path, body) {
 // The auth screen is already the destination, and /ops runs on the operator
 // cookie, not an Account session — sending it to the login form would be a lie.
 function ownsIts401() {
-  return ["/", "/index.html", "/ops"].includes(location.pathname);
+  return ["/signin", "/signin.html", "/ops"].includes(location.pathname);
 }
 
 // §7: a failure says what failed in words. Unknown codes fall back to the code
