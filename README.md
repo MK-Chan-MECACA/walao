@@ -268,6 +268,7 @@ flowchart LR
 | `groups` | `id`, `session_id`, `external_jid`, `name` | 外部 JID 需租户内唯一 |
 | `group_subscriptions` | `user_id`, `group_id`, `enabled`, `retention_days` | 明确选择及保存政策 |
 | `messages` | `external_id`, `group_id`, `sender_ref`, `sender_name`, `sent_at`, `body_ciphertext` | 原文加密并自动过期 |
+| `contacts` | `session_id`, `jid`, `name` | 仅存显示名，用于还原 @提及；随 Session 一并删除 |
 | `summary_schedules` | `user_id`, `local_time`, `timezone`, `channel` | 避免只存 UTC 时间 |
 | `summaries` | `period_start`, `period_end`, `content`, `status` | 保存生成版本与模型资料 |
 | `summary_sources` | `summary_id`, `message_id` | 支持追溯与删除传播 |
@@ -662,6 +663,7 @@ The architecture diagram in the Chinese section is language-neutral. The respons
 | `groups` | `id`, `session_id`, `external_jid`, `name` | External JID is unique inside a tenant |
 | `group_subscriptions` | `user_id`, `group_id`, `enabled`, `retention_days` | Explicit selection and retention policy |
 | `messages` | `external_id`, `group_id`, `sender_ref`, `sender_name`, `sent_at`, `body_ciphertext` | Encrypted raw text with automatic expiry |
+| `contacts` | `session_id`, `jid`, `name` | Display names only, so an @mention reads as a person; deleted with the Session |
 | `summary_schedules` | `user_id`, `local_time`, `timezone`, `channel` | Store local scheduling intent, not UTC alone |
 | `summaries` | `period_start`, `period_end`, `content`, `status` | Keeps generation and model metadata |
 | `summary_sources` | `summary_id`, `message_id` | Enables traceability and deletion propagation |

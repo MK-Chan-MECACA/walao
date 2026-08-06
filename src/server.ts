@@ -7,7 +7,7 @@ import { purgeExpired } from "./retention.ts";
 import { tickScheduler } from "./scheduler.ts";
 import { deliverSummaries } from "./deliver.ts";
 import { processSummaryJobs } from "./summarize.ts";
-import { backfillGroupNames } from "./subscriptions.ts";
+import { backfillGroupNames, syncContacts } from "./subscriptions.ts";
 import { evictIdleSessions } from "./connections.ts";
 import { LocalSummarizer } from "./summarizer/local.ts";
 import { AnthropicSummarizer } from "./summarizer/anthropic.ts";
@@ -79,6 +79,9 @@ async function main(): Promise<void> {
     backfillGroupNames(pool, gateway).catch((err) =>
       console.error("group name backfill error", err),
     );
+    // Contact names ride the same slow timer for the same reason: it is a
+    // network call, and an address book does not change by the second.
+    syncContacts(pool, gateway).catch((err) => console.error("contact sync error", err));
     // ponytail: eviction rides the 60s timer — a 14-day threshold does not care
     // about the minute. Move it to a daily cron if the scan ever costs anything.
     evictIdleSessions(pool).catch((err) => console.error("session eviction error", err));

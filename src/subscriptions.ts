@@ -352,3 +352,37 @@ export async function backfillGroupNames(pool: pg.Pool, gateway: GatewayPort): P
   }
   return named;
 }
+
+// Refresh each connected session's contact names. A message event only names
+// people who post, so someone who is only ever @mentioned ("@40102864666870")
+// has no name on any message row — the session's contact list is where those
+// names live. One gateway call per connected session; the whole list is
+// upserted in a single statement because a real address book runs to thousands
+// of rows and a per-row round trip would take longer than the interval.
+// Names and JIDs only — never message content.
+export async function syncContacts(pool: pg.Pool, gateway: GatewayPort): Promise<number> {
+  const { rows: sessions } = await pool.query(
+    `SELECT id, external_session_id FROM whatsapp_sessions WHERE status = 'connected'`,
+  );
+
+  let synced = 0;
+  for (const s of sessions) {
+    let contacts;
+    try {
+      contacts = await gateway.listContacts(s.external_session_id);
+    } catch {
+      continue; // gateway down or session gone: the next pass retries
+    }
+    if (contacts.length === 0) continue;
+    const res = await pool.query(
+      `INSERT INTO contacts (session_id, jid, name)
+       SELECT $1, jid, name FROM unnest($2::text[], $3::text[]) AS t(jid, name)
+       ON CONFLICT (session_id, jid)
+         DO UPDATE SET name = EXCLUDED.name, updated_at = now()
+         WHERE contacts.name IS DISTINCT FROM EXCLUDED.name`,
+      [s.id, contacts.map((c) => c.jid), contacts.map((c) => c.name)],
+    );
+    synced += res.rowCount ?? 0;
+  }
+  return synced;
+}

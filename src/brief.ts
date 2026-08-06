@@ -1,6 +1,7 @@
 import type pg from "pg";
 import type { SummaryPayload } from "./summarize.ts";
 import { jumpUrl } from "./surfaces.ts";
+import { loadSenderNames, resolvePayloadNames } from "./sender-names.ts";
 
 // section/item_index locate the item inside its Summary, so the Brief can act
 // on what it shows: the state and confirm routes are keyed on exactly this pair
@@ -61,8 +62,11 @@ export async function buildTodayBrief(pool: pg.Pool, userId: string): Promise<To
     worth_noting: [],
   };
   const merged = new Map<string, BriefItem>();
+  const names = await loadSenderNames(pool, userId);
   for (const r of rows) {
-    const payload = r.payload as SummaryPayload;
+    // Resolved before the merge key is taken, so two groups that named the same
+    // person still collapse into one entry.
+    const payload = resolvePayloadNames(names, r.payload as SummaryPayload);
     for (const [section, bucket] of BUCKETS) {
       for (const [index, it] of (payload[section] ?? []).entries()) {
         const key = `${bucket}\n${it.text.trim().toLowerCase()}`;

@@ -6,8 +6,8 @@ import { loadSenderNames } from "../src/sender-names.ts";
 const db = {
   query: async () => ({
     rows: [
-      { sender_ref: "30558843351102@lid", sender_name: "Sam" },
-      { sender_ref: "6591234567@c.us", sender_name: "Siau Han" },
+      { ref: "30558843351102@lid", name: "Sam" },
+      { ref: "6591234567@c.us", name: "Siau Han" },
     ],
   }),
 } as never;

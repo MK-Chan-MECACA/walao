@@ -128,6 +128,14 @@ export class FakeGateway implements GatewayPort {
       members: g.members ?? null,
     }));
   }
+
+  // Contact names the fake gateway will report, keyed by session id. Only the
+  // mention-resolution tests set this; everyone else gets an empty address book.
+  contacts: Record<string, Array<{ jid: string; name: string }>> = {};
+
+  async listContacts(sessionExternalId: string): Promise<Array<{ jid: string; name: string }>> {
+    return this.contacts[sessionExternalId] ?? [];
+  }
 }
 
 // Fake SummarizerPort — the AI-pipeline test seam: canned structured JSON out,

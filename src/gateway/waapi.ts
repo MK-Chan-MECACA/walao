@@ -202,6 +202,25 @@ export class WaapiGateway implements GatewayPort {
     });
   }
 
+  // Contacts carry four name-ish fields and any of them may be empty. Order is
+  // most-deliberate first: what the user saved, then what the person calls
+  // themselves, then the business name. A contact with none is skipped — it
+  // would only shadow a real name from a message with an empty string.
+  async listContacts(externalSessionId: string): Promise<Array<{ jid: string; name: string }>> {
+    const rows = await this.call("GET", `/api/${externalSessionId}/contacts`);
+    if (!Array.isArray(rows)) throw new Error("waapi contacts: expected array");
+    const out: Array<{ jid: string; name: string }> = [];
+    for (const r of rows) {
+      const c = asRecord(r);
+      if (typeof c.jid !== "string" || c.jid.length === 0) continue;
+      const name = [c.full_name, c.push_name, c.business, c.first].find(
+        (v) => typeof v === "string" && v.trim().length > 0,
+      );
+      if (typeof name === "string") out.push({ jid: c.jid, name: name.trim() });
+    }
+    return out;
+  }
+
   private async sendText(session: string, chatId: string, text: string): Promise<void> {
     await this.call("POST", "/api/sendText", { session, chat_id: chatId, text });
   }

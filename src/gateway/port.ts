@@ -59,4 +59,9 @@ export interface GatewayPort {
   listGroups(
     externalSessionId: string,
   ): Promise<Array<{ jid: string; name: string | null; members: number | null }>>;
+
+  // Display names for the JIDs this session knows. Message events only name
+  // people who post, so someone who is only ever @mentioned has no name
+  // anywhere else. Names and JIDs only — never message content.
+  listContacts(externalSessionId: string): Promise<Array<{ jid: string; name: string }>>;
 }

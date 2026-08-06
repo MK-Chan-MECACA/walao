@@ -1,5 +1,6 @@
 import type pg from "pg";
 import type { ActionItem, SummaryPayload } from "./summarize.ts";
+import { loadSenderNames, resolvePayloadNames } from "./sender-names.ts";
 
 // App surfaces (ticket 9): browsable summary history, per-item complete/dismiss
 // state, jump-back links, and user-confirmed reminders. A reminder exists only
@@ -52,6 +53,10 @@ export async function listSummaries(pool: pg.Pool, userId: string): Promise<Summ
      ORDER BY s.created_at DESC`,
     [userId],
   );
+  // A summary written before mention resolution existed has raw "@40102864666870"
+  // in its item text, and history is read for 90 days — so the names go on at
+  // read time here too, not only on the Brief.
+  const names = await loadSenderNames(pool, userId);
   return rows.map((r) => ({
     id: r.id as string,
     group_id: r.group_id as string,
@@ -62,7 +67,7 @@ export async function listSummaries(pool: pg.Pool, userId: string): Promise<Summ
     window_start: (r.window_start as Date).toISOString(),
     window_end: (r.window_end as Date).toISOString(),
     created_at: (r.created_at as Date).toISOString(),
-    payload: r.payload as SummaryPayload,
+    payload: resolvePayloadNames(names, r.payload as SummaryPayload),
     states: r.states as ItemState[],
   }));
 }
