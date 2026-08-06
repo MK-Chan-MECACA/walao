@@ -92,35 +92,35 @@
       </section>
 
       <section class="card">
-        <h2>Your data</h2>
-        <button id="export" class="secondary">Export everything</button>
-        <details>
-          <summary>Delete my Account</summary>
-          <div class="form">
-            <!-- §50: what deletion destroys, stated before it can be done. -->
-            <p class="notice">
-              This destroys your encryption key, so every stored message and Summary becomes
-              unreadable, and deletes your Account, Groups, Reminders and Memories. Your WhatsApp
-              connection ends. It cannot be undone and there is no export afterwards.
-            </p>
-            <label for="confirm">Type DELETE to confirm</label>
-            <input type="text" id="confirm" autocomplete="off" />
-            <button id="delete" disabled>Delete my Account permanently</button>
-          </div>
-        </details>
-      </section>
-
-      <section class="card">
-        <h2>Your consent record</h2>
+        <h3>What you have agreed to</h3>
         <ul class="rows" id="attestations">
           <li class="muted">Loading…</li>
         </ul>
       </section>
 
-      <section class="card">
-        <h2>Session</h2>
-        <button id="logout" class="secondary">Log out</button>
-      </section>
+      <!-- Dashboard, 2a — Leaving + Delete side by side. Leaving is routine
+           (export, log out); Delete is destructive with its own red border. -->
+      <div class="cols-2">
+        <div class="card sub-card" style="margin:0">
+          <h3>Leaving</h3>
+          <p class="muted">Take everything with you as one JSON file, or end the session on this device.</p>
+          <div class="actions">
+            <button id="export" class="secondary">Export my data</button>
+            <button id="logout" class="secondary">Log out</button>
+          </div>
+        </div>
+        <div class="card sub-card" style="box-shadow:0 0 0 1px oklch(0.6 0.13 25)">
+          <h3 style="color:oklch(0.78 0.13 25)">Delete account</h3>
+          <!-- §50: what deletion destroys, stated before it can be done. -->
+          <p class="muted">
+            Every message, Summary, Memory and Reminder goes. This cannot be undone. Type DELETE to confirm.
+          </p>
+          <div style="display:flex;gap:8px;align-items:center">
+            <input type="text" id="confirm" autocomplete="off" placeholder="DELETE" style="flex:1 1 auto;min-width:0" />
+            <button id="delete" disabled>Delete</button>
+          </div>
+        </div>
+      </div>
     </main>
 
     <script type="module" src="/settings.js"></script>

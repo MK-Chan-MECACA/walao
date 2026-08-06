@@ -11,8 +11,11 @@
     <header id="chrome"></header>
     <main>
       <h1>Ask WALAO</h1>
-      <!-- §43: the boundary is stated in the surface most likely to blur it. -->
+      <!-- §43: the boundary is stated in the surface most likely to blur it.
+           Dynamic scope (enabled Groups) is filled by ask.js; the static
+           boundary below it never changes. -->
       <p id="scope" class="muted">Loading…</p>
+      <p id="boundary" class="muted">Answers come from Summaries and Memories only — never from raw messages.</p>
 
       <section class="card">
         <form id="ask-form">

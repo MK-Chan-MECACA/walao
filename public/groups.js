@@ -127,8 +127,9 @@ function render() {
   );
 
   $("count").textContent = groups.length
-    ? `Showing ${matches.length} of ${groups.length} Group(s).`
+    ? `${matches.length} OF ${groups.length} SHOWN`
     : "";
+  $("count").className = groups.length ? "mono muted" : "";
   $("groups").replaceChildren(
     ...(matches.length
       ? matches.map(row)

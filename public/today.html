@@ -9,9 +9,11 @@
   </head>
   <body>
     <header id="chrome"></header>
-    <main class="with-rail">
+
+    <!-- ═══════════════════ 1a Briefing view (default) ═══════════════════ -->
+    <main class="with-rail" id="briefing-view">
       <div class="brief">
-        <h1>Today</h1>
+        <h1>Today <button class="view-toggle" id="to-console" title="Switch to console view">Console →</button></h1>
         <p id="meta" class="muted">Loading…</p>
         <!-- §24: a Brief drawn over a Coverage Gap says so on its own face, not
              only in the shared banner. -->
@@ -70,6 +72,97 @@
           <p class="muted">Loading…</p>
         </section>
       </aside>
+    </main>
+
+    <!-- ═══════════════════ 1b Console view (toggled) ═══════════════════ -->
+    <main id="console-view" hidden>
+      <div class="console-header">
+        <div class="head-left">
+          <p class="date-line" id="console-date">Loading…</p>
+          <h1>Today <button class="view-toggle" id="to-briefing" title="Switch to briefing view">Briefing →</button></h1>
+        </div>
+        <div class="head-right">
+          <div class="status-chip">
+            <span class="dot"></span>
+            <span id="console-status">Processing</span>
+          </div>
+          <button id="run-brief" class="secondary">Run brief now</button>
+        </div>
+      </div>
+
+      <!-- 4-column counters -->
+      <div class="counters">
+        <div>
+          <p class="counter-label accent">Needs action</p>
+          <p class="counter-value" id="counter-action">0</p>
+          <p class="counter-sub" id="counter-action-sub"></p>
+        </div>
+        <div>
+          <p class="counter-label">Decided</p>
+          <p class="counter-value" id="counter-decided">0</p>
+          <p class="counter-sub" id="counter-decided-sub"></p>
+        </div>
+        <div>
+          <p class="counter-label">Summaries · 24h</p>
+          <p class="counter-value" id="counter-summaries">0</p>
+          <p class="counter-sub" id="counter-summaries-sub"></p>
+        </div>
+        <div>
+          <p class="counter-label">Credits today</p>
+          <p class="counter-value" id="counter-credits">0</p>
+          <div class="counter-bar"><span id="counter-credits-bar" style="width:0%"></span></div>
+        </div>
+      </div>
+
+      <div class="console-body">
+        <div class="item-col">
+          <div class="bar">
+            <div class="segmented" id="console-tabs">
+              <button data-bucket="needs_action" class="on">Needs action</button>
+              <button data-bucket="decided">Decided</button>
+              <button data-bucket="worth_noting">Worth noting</button>
+            </div>
+            <span class="mono muted" id="console-meter"></span>
+          </div>
+
+          <ul class="console-items" id="console-items">
+            <li class="muted">Loading…</li>
+          </ul>
+
+          <a href="/today" id="console-past-link">Past summaries →</a>
+        </div>
+
+        <div class="console-rail">
+          <!-- Coverage timeline -->
+          <div class="coverage-card" id="coverage-card" hidden>
+            <div class="coverage-head">
+              <h3>Coverage · last 24h</h3>
+              <span id="coverage-gap-label" style="font-size:11px;color:var(--warn-ink)"></span>
+            </div>
+            <div class="coverage-bar-stack" id="coverage-bar"></div>
+            <div class="coverage-labels" id="coverage-labels"></div>
+            <p id="coverage-note" style="font-size:12px;color:var(--warn-ink);line-height:1.45"></p>
+          </div>
+
+          <!-- Groups summary -->
+          <div class="card" style="margin:0">
+            <div style="display:flex;align-items:center;justify-content:space-between">
+              <h3>Groups</h3>
+              <span class="muted" id="console-groups-count" style="font-size:11.5px"></span>
+            </div>
+            <ul class="rail-groups" id="console-groups-list"></ul>
+            <a href="/groups" style="font-size:12px">Manage Groups →</a>
+          </div>
+
+          <!-- Latest summaries -->
+          <div class="card" style="margin:0">
+            <h3>Latest summaries</h3>
+            <ul class="rows" id="console-summaries-list">
+              <li class="muted">Loading…</li>
+            </ul>
+          </div>
+        </div>
+      </div>
     </main>
 
     <script type="module" src="/today.js"></script>

@@ -20,6 +20,11 @@ const sourceKey = (s) => `${s.summary_id}|${s.section}|${s.item_index}`;
 let summaries = [];
 // Every item in the Brief, in bucket order — the meter counts against this.
 let items = [];
+// Cached for console view — fetched once, rendered on toggle.
+let cachedBrief = null;
+let cachedGroups = [];
+let cachedUsage = null;
+let consoleBucket = "needs_action";
 
 const status = await mount("/today");
 loadRail();
@@ -30,6 +35,7 @@ try {
     api("GET", "/v1/summaries"),
   ]);
   summaries = history.summaries;
+  cachedBrief = brief;
   for (const s of summaries) {
     for (const st of s.states) {
       states.set(`${s.id}|${st.section}|${st.item_index}`, st.state);
@@ -38,8 +44,289 @@ try {
   renderBrief(brief);
   renderFilters();
   renderHistory();
+  // Pre-fetch console data
+  loadConsoleData();
 } catch (err) {
   fail(err);
+}
+
+async function loadConsoleData() {
+  try {
+    const [usage, groups] = await Promise.all([
+      api("GET", "/v1/usage"),
+      api("GET", "/v1/groups"),
+    ]);
+    cachedUsage = usage;
+    cachedGroups = groups.groups;
+    if (!$("console-view").hidden) renderConsole();
+  } catch { /* rail cards handle their own errors */ }
+}
+
+// ═══════════════ Console view ═══════════════
+
+$("to-console").onclick = () => {
+  $("briefing-view").hidden = true;
+  $("console-view").hidden = false;
+  renderConsole();
+};
+
+$("to-briefing").onclick = () => {
+  $("console-view").hidden = true;
+  $("briefing-view").hidden = false;
+};
+
+$("console-tabs").onclick = (e) => {
+  const btn = e.target.closest("button");
+  if (!btn) return;
+  consoleBucket = btn.dataset.bucket;
+  for (const b of $("console-tabs").querySelectorAll("button")) {
+    b.className = b.dataset.bucket === consoleBucket ? "on" : "";
+  }
+  renderConsoleItems();
+};
+
+$("run-brief").onclick = async () => {
+  $("run-brief").disabled = true;
+  try {
+    await api("POST", "/v1/briefs/run", {});
+  } catch (err) {
+    fail(err);
+  }
+  $("run-brief").disabled = false;
+};
+
+function renderConsole() {
+  if (!cachedBrief) return;
+  const brief = cachedBrief;
+
+  // Date line
+  $("console-date").textContent = `${new Date().toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" })} · brief delivered ${brief.date}`;
+
+  // Status chip
+  $("console-status").textContent = status?.block
+    ? `Blocked · ${status.block.reason}`
+    : status?.session?.status
+      ? `Processing · ${status.session.status}`
+      : "Processing";
+
+  // Counters
+  const needsAction = brief.needs_action?.length ?? 0;
+  const decided = brief.decided?.length ?? 0;
+  const worthNoting = brief.worth_noting?.length ?? 0;
+  $("counter-action").textContent = String(needsAction);
+  $("counter-action-sub").textContent = needsAction ? `${needsAction} item(s)` : "Nothing needs action";
+  $("counter-decided").textContent = String(decided);
+  $("counter-decided-sub").textContent = `${decided + worthNoting} total across all buckets`;
+  $("counter-summaries").textContent = String(brief.summary_count ?? 0);
+
+  if (cachedUsage) {
+    $("counter-summaries-sub").textContent = `${cachedUsage.usage.messages_today?.toLocaleString() ?? 0} messages read`;
+    $("counter-credits").innerHTML = `${cachedUsage.usage.credits_today ?? 0}<span style="font-size:15px;color:var(--muted)"> / ${cachedUsage.limits.max_summaries_per_day ?? 0}</span>`;
+    const pct = Math.min(100, Math.round(((cachedUsage.usage.credits_today ?? 0) / (cachedUsage.limits.max_summaries_per_day || 1)) * 100));
+    $("counter-credits-bar").style.width = `${pct}%`;
+  }
+
+  // Coverage timeline
+  renderCoverage();
+
+  // Console groups
+  renderConsoleGroups();
+
+  // Console summaries
+  renderConsoleSummaries();
+
+  // Items
+  renderConsoleItems();
+}
+
+function renderConsoleItems() {
+  if (!cachedBrief) return;
+  const bucketItems = cachedBrief[consoleBucket] ?? [];
+  items = [];
+  for (const b of ["needs_action", "decided", "worth_noting"]) {
+    items.push(...(cachedBrief[b] ?? []));
+  }
+  const cleared = items.filter((i) => states.get(sourceKey(i.sources[0]))).length;
+  $("console-meter").textContent = `${cleared} / ${items.length} CLEARED`;
+
+  // Update segmented button labels with counts
+  for (const b of $("console-tabs").querySelectorAll("button")) {
+    const bk = b.dataset.bucket;
+    const count = cachedBrief[bk]?.length ?? 0;
+    b.textContent = `${b.dataset.bucket === "needs_action" ? "Needs action" : b.dataset.bucket === "decided" ? "Decided" : "Worth noting"} ${count}`;
+  }
+
+  if (bucketItems.length === 0) {
+    $("console-items").replaceChildren(
+      el("li", {}, el("p", { class: "muted", text: `Nothing in ${consoleBucket.replace("_", " ")} right now.` })),
+    );
+    return;
+  }
+
+  $("console-items").replaceChildren(
+    ...bucketItems.map((item, i) => consoleItemRow(item, i)),
+  );
+}
+
+function consoleItemRow(item, index) {
+  const state = states.get(sourceKey(item.sources[0])) ?? null;
+
+  const groups = new Map();
+  for (const s of item.sources) groups.set(s.group_id, s);
+
+  const chips = el(
+    "div",
+    { class: "chips" },
+    ...[...groups.values()].map((s) =>
+      el("a", { class: "chip", href: s.jump_url, text: s.group_name ?? s.group_id }),
+    ),
+  );
+
+  const action = item.sources.find((s) => s.section === "action_items");
+
+  const actions = el("div", { class: "item-actions" });
+  if (action) {
+    actions.append(
+      el("button", {
+        text: "Confirm as reminder",
+        onclick: (e) => confirmReminder(e.target, action),
+      }),
+    );
+  }
+  actions.append(
+    el("button", {
+      class: "secondary",
+      text: "Done",
+      "aria-pressed": state === "complete" ? "true" : "false",
+      onclick: (e) => setConsoleState(e.target, item, state === "complete" ? null : "complete"),
+    }),
+    el("button", {
+      class: "secondary",
+      text: "Dismiss",
+      "aria-pressed": state === "dismissed" ? "true" : "false",
+      onclick: (e) => setConsoleState(e.target, item, state === "dismissed" ? null : "dismissed"),
+    }),
+  );
+
+  const body = el("div", { class: "item-body" },
+    el("p", { text: item.text }),
+    chips,
+    actions,
+    citations(item.sources),
+  );
+
+  return el("li", {},
+    el("span", { class: "item-num", text: String(index + 1).padStart(2, "0") }),
+    body,
+  );
+}
+
+async function setConsoleState(button, item, next) {
+  button.disabled = true;
+  try {
+    await Promise.all(
+      item.sources.map((s) =>
+        api("PUT", `/v1/summaries/${s.summary_id}/items/${s.section}/${s.item_index}/state`, { state: next }),
+      ),
+    );
+  } catch (err) {
+    button.disabled = false;
+    return fail(err);
+  }
+  for (const s of item.sources) {
+    if (next === null) states.delete(sourceKey(s));
+    else states.set(sourceKey(s), next);
+  }
+  renderConsoleItems();
+}
+
+function renderCoverage() {
+  const gap = status?.coverage_gap;
+  if (!gap) {
+    $("coverage-card").hidden = true;
+    return;
+  }
+  $("coverage-card").hidden = false;
+
+  const now = Date.now();
+  const gapStart = new Date(gap.started_at).getTime();
+  const gapEnd = gap.resumed_at ? new Date(gap.resumed_at).getTime() : now;
+  const dayStart = now - 24 * 60 * 60 * 1000;
+
+  // Normalize to 24h window
+  const total = now - dayStart;
+  const beforeGap = Math.max(0, gapStart - dayStart);
+  const gapDuration = gapEnd - gapStart;
+  const afterGap = Math.max(0, now - gapEnd);
+
+  const beforePct = Math.round((beforeGap / total) * 100);
+  const gapPct = Math.round((gapDuration / total) * 100);
+  const afterPct = 100 - beforePct - gapPct;
+
+  $("coverage-gap-label").textContent = `${Math.round(gapDuration / 3600000)}h ${Math.round((gapDuration % 3600000) / 60000)}m gap`;
+  $("coverage-bar").replaceChildren(
+    el("span", { class: "on", style: `flex:${beforePct} 1 0` }),
+    el("span", { class: "gap", style: `flex:${gapPct} 1 0` }),
+    el("span", { class: "on", style: `flex:${afterPct} 1 0` }),
+  );
+
+  const fmt = (ts) => new Date(ts).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", hour12: false });
+  $("coverage-labels").replaceChildren(
+    el("span", { text: fmt(dayStart) }),
+    el("span", { text: fmt(gapStart) }),
+    el("span", { text: fmt(gapEnd) }),
+    el("span", { text: "NOW" }),
+  );
+
+  $("coverage-note").innerHTML = `Disconnected ${fmt(gapStart)}–${fmt(gapEnd)}, so this Brief is partial. <a href="/pair" style="color:currentColor">Re-pair</a>`;
+}
+
+function renderConsoleGroups() {
+  const enabled = cachedGroups.filter((g) => g.enabled);
+  $("console-groups-count").textContent = `${enabled.length} of ${cachedGroups.length} enabled`;
+
+  const list = $("console-groups-list");
+  if (enabled.length === 0) {
+    list.replaceChildren(el("li", { class: "muted", text: "No Group enabled yet." }));
+    return;
+  }
+
+  list.replaceChildren(
+    ...enabled.map((g) => {
+      const hasSchedule = !!g.schedule;
+      return el("li", {},
+        el("span", { class: hasSchedule ? "dot on" : "dot warn" }),
+        el("span", { class: "grow", text: g.name ?? g.external_jid }),
+        el("span", {
+          class: "mono muted",
+          text: hasSchedule ? g.schedule.local_time : "NO TIME",
+        }),
+      );
+    }),
+  );
+}
+
+function renderConsoleSummaries() {
+  const latest = summaries.slice(0, 3);
+  const list = $("console-summaries-list");
+  if (latest.length === 0) {
+    list.replaceChildren(el("li", { class: "muted", text: "No Summaries yet." }));
+    return;
+  }
+
+  list.replaceChildren(
+    ...latest.map((s) =>
+      el("li", {},
+        el("div", { class: "grow" },
+          el("strong", { text: s.group_name ?? s.chat_jid }),
+          el("span", {
+            class: "mono muted",
+            text: ` ${fmtDate(s.window_end).toUpperCase()} · ${s.language?.toUpperCase() ?? "EN"} · ${(s.payload?.action_items?.length ?? 0) + (s.payload?.decisions?.length ?? 0) + (s.payload?.highlights?.length ?? 0)} ITEMS`,
+          }),
+        ),
+      ),
+    ),
+  );
 }
 
 function fail(err) {
