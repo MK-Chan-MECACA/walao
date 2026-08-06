@@ -18,6 +18,8 @@ test("an unnamed message borrows the name the same sender used elsewhere", async
   assert.equal(names.nameFor("30558843351102@lid", null), "Sam");
   // A name on the row itself always wins — the map is only a fallback.
   assert.equal(names.nameFor("30558843351102@lid", "Sammy"), "Sammy");
+  // A message arrives from one linked device (":51"); the name is the person's.
+  assert.equal(names.nameFor("30558843351102:51@lid", null), "Sam");
   // Unknown sender stays unresolved so the caller can fall back to the raw id.
   assert.equal(names.nameFor("99999999999@lid", null), null);
   assert.equal(names.nameFor(null, null), null);

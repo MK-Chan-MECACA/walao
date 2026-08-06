@@ -50,22 +50,23 @@ export async function loadSenderNames(db: Db, userId: string): Promise<SenderNam
      ORDER BY pri`,
     [userId],
   );
-  const byRef = new Map<string, string>();
-  const byLocal = new Map<string, string>();
-  for (const r of rows) {
-    const ref = r.ref as string;
-    const name = r.name as string;
-    byRef.set(ref, name);
-    // "30558843351102@lid" and "6512345678@c.us" both mention as the local part.
-    byLocal.set(ref.split("@")[0], name);
-  }
+  const byPerson = new Map<string, string>();
+  for (const r of rows) byPerson.set(person(r.ref as string), r.name as string);
   return {
     nameFor: (senderRef, senderName) =>
-      senderName ?? (senderRef ? (byRef.get(senderRef) ?? null) : null),
+      senderName ?? (senderRef ? (byPerson.get(person(senderRef)) ?? null) : null),
     resolveMentions: (text) =>
       text.replace(/@(\d{5,})/g, (whole, digits: string) => {
-        const name = byLocal.get(digits);
+        const name = byPerson.get(digits);
         return name ? `@${name}` : whole;
       }),
   };
+}
+
+// The person behind a JID, which is not the JID: a message arrives from one
+// linked device ("112476687458485:90@lid" — the :90 is the device), the contact
+// list stores the person ("112476687458485@lid"), and a mention writes the bare
+// id. All three are the same human, and only the leading digits say so.
+function person(jid: string): string {
+  return (jid.split("@")[0] ?? "").split(":")[0] ?? "";
 }

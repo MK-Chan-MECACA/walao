@@ -66,6 +66,10 @@ describe("mention and sender names", () => {
 
     const names = await loadSenderNames(h.pool, userId);
     assert.equal(names.nameFor("30558843351102@lid", null), "Wei Ping");
+    // Same person, posting from a linked device — WhatsApp appends ":51" to the
+    // JID and the contact list has no such entry, so the device has to be
+    // stripped or every message from a second device shows a raw id.
+    assert.equal(names.nameFor("30558843351102:51@lid", null), "Wei Ping");
     assert.equal(names.resolveMentions("@30558843351102 tell her"), "@Wei Ping tell her");
   });
 

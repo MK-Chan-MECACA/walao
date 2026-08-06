@@ -72,7 +72,9 @@ for (const s of sessions.rows) {
      WHERE m.user_id = $1 AND m.sent_at > now() - ($2 || ' hours')::interval
        AND m.sender_name IS NULL
        AND NOT EXISTS (SELECT 1 FROM contacts c JOIN whatsapp_sessions ws ON ws.id = c.session_id
-                       WHERE ws.user_id = $1 AND c.jid = m.sender_ref)`,
+                       WHERE ws.user_id = $1
+                         AND split_part(c.jid, '@', 1)
+                             = split_part(split_part(m.sender_ref, '@', 1), ':', 1))`,
     [s.user_id, String(hours)],
   );
   console.log(`  messages whose sender still has no name: ${unnamedSenders.rows[0].count}`);
