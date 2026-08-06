@@ -48,6 +48,7 @@ async function loadUsage() {
     capRow("Messages today", usage.usage.messages_today, usage.limits.max_messages_per_day),
     capRow("Summaries today", usage.usage.credits_today, usage.limits.max_summaries_per_day),
   );
+  $("fix-cap").hidden = usage.usage.enabled_groups <= usage.limits.max_groups;
   $("burn").replaceChildren(
     ...(usage.groups.length
       ? usage.groups.map((g) =>

@@ -9,42 +9,67 @@
   </head>
   <body>
     <header id="chrome"></header>
-    <main>
-      <h1>Today</h1>
-      <p id="meta" class="muted">Loading…</p>
-      <!-- §24: a Brief drawn over a Coverage Gap says so on its own face, not
-           only in the shared banner. -->
-      <p id="gap" class="notice" hidden></p>
-      <p id="error" class="error" hidden></p>
+    <main class="with-rail">
+      <div class="brief">
+        <h1>Today</h1>
+        <p id="meta" class="muted">Loading…</p>
+        <!-- §24: a Brief drawn over a Coverage Gap says so on its own face, not
+             only in the shared banner. -->
+        <p id="gap" class="notice" hidden></p>
+        <p id="error" class="error" hidden></p>
 
-      <section class="card" id="empty" hidden>
-        <h2>Nothing in today's Brief</h2>
-        <p id="empty-line"></p>
-      </section>
-
-      <section class="card bucket" id="needs_action" hidden>
-        <h2>Needs action</h2>
-        <ul class="rows"></ul>
-      </section>
-      <section class="card bucket" id="decided" hidden>
-        <h2>Decided</h2>
-        <ul class="rows"></ul>
-      </section>
-      <section class="card bucket" id="worth_noting" hidden>
-        <h2>Worth noting</h2>
-        <ul class="rows"></ul>
-      </section>
-
-      <section class="card">
-        <h2>Past summaries</h2>
-        <div class="filters">
-          <label>Date <input type="date" id="f-date" /></label>
-          <label>Group <select id="f-group"><option value="">All Groups</option></select></label>
+        <!-- The Brief is finite: one tick per item, filled as it is cleared. -->
+        <div class="meter" id="meter" hidden>
+          <div class="ticks"></div>
+          <p class="label"></p>
         </div>
-        <ul class="rows" id="history">
-          <li class="muted">Loading…</li>
-        </ul>
-      </section>
+
+        <section class="card" id="empty" hidden>
+          <h2>Nothing in today's Brief</h2>
+          <p id="empty-line"></p>
+        </section>
+
+        <section class="card bucket" id="needs_action" hidden>
+          <h2>Needs action</h2>
+          <ul class="rows"></ul>
+        </section>
+        <section class="card bucket" id="decided" hidden>
+          <h2>Decided</h2>
+          <ul class="rows"></ul>
+        </section>
+        <section class="card bucket" id="worth_noting" hidden>
+          <h2>Worth noting</h2>
+          <ul class="rows"></ul>
+        </section>
+
+        <section class="card">
+          <h2>Past summaries</h2>
+          <div class="filters">
+            <label>Date <input type="date" id="f-date" /></label>
+            <label>Group <select id="f-group"><option value="">All Groups</option></select></label>
+          </div>
+          <ul class="rows" id="history">
+            <li class="muted">Loading…</li>
+          </ul>
+        </section>
+      </div>
+
+      <!-- §44, §35: what is true today, beside what you do about it. The rail is
+           read-only — each card links to the screen that owns the thing. -->
+      <aside class="rail">
+        <section class="card" id="usage">
+          <h3>Today's usage</h3>
+          <p class="muted">Loading…</p>
+        </section>
+        <section class="card" id="rail-groups">
+          <h3>Groups</h3>
+          <p class="muted">Loading…</p>
+        </section>
+        <section class="card" id="open-reminders">
+          <h3>Open reminders</h3>
+          <p class="muted">Loading…</p>
+        </section>
+      </aside>
     </main>
 
     <script type="module" src="/today.js"></script>

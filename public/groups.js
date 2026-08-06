@@ -155,6 +155,7 @@ const size = (g) => (g.members ? `${g.members} members · ` : "");
 function row(g) {
   const name = shown(g);
   const state = g.blocked ? "blocked" : g.enabled ? "enabled" : "off";
+  const dot = el("span", { class: g.blocked ? "dot off" : g.enabled ? "dot on" : "dot off" });
   const label = {
     blocked: "blocked — over your Plan's Group cap, not being read",
     enabled: g.schedule
@@ -176,7 +177,7 @@ function row(g) {
     el(
       "div",
       { class: "grow" },
-      el("strong", { text: name }),
+      el("div", { class: "row-head" }, dot, el("strong", { text: name })),
       el("span", { class: "muted", text: ` ${size(g)}${label}` }),
     ),
     toggle,

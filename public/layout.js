@@ -112,13 +112,44 @@ async function showSources(body, refs) {
 // page that needs the block reason does not fetch /v1/status twice.
 export async function mount(active) {
   const chrome = document.getElementById("chrome");
-  const nav = el("nav", {}, el("span", { class: "nav-brand", text: "WALAO" }));
+  const brand = el(
+    "span",
+    { class: "nav-brand" },
+    // Brand CI, Lockup A: the mark is three rules, longest to shortest.
+    el("span", { class: "nav-mark" }, el("i"), el("i"), el("i")),
+    el("span", { text: "WALAO" }),
+  );
+  const nav = el("nav", {}, brand);
   for (const [href, label] of NAV) {
     nav.append(el("a", { href, text: label, "aria-current": href === active ? "page" : null }));
   }
+  const plan = el("div", { class: "nav-plan" }, el("h3", { text: "Plan" }));
+  nav.append(plan);
   const banner = el("div", { class: "status" });
   chrome.replaceChildren(nav, banner);
+  // The Plan block is context, not the page: it fills in when it fills in, and
+  // a failed /v1/usage leaves the rail short rather than the screen broken.
+  showPlan(plan);
   return refresh(banner);
+}
+
+async function showPlan(plan) {
+  let usage;
+  try {
+    usage = await api("GET", "/v1/usage");
+  } catch {
+    return;
+  }
+  // The API answers with the Plan's id ("pro"); this is the one place it is
+  // read by a person rather than matched against.
+  const name = usage.plan.charAt(0).toUpperCase() + usage.plan.slice(1);
+  plan.append(
+    el("p", { text: usage.trial ? `${name} trial` : `${name} Plan` }),
+    el("p", {
+      class: "muted",
+      text: usage.trial ? `${usage.trial.days_remaining} day(s) left · no card` : "Billed monthly",
+    }),
+  );
 }
 
 async function refresh(banner) {
@@ -143,7 +174,15 @@ async function refresh(banner) {
     parts.push(el("span", { text: "WALAO is processing." }));
   }
   if (status.session) {
-    parts.push(el("span", { class: "muted", text: `Session: ${status.session.status}` }));
+    const since = new Date(status.session.status_changed_at);
+    parts.push(
+      el("span", {
+        class: "muted",
+        text:
+          `Session ${status.session.status}` +
+          (isNaN(since) ? "" : ` · since ${since.toLocaleString(undefined, { timeStyle: "short" })}`),
+      }),
+    );
   }
   if (status.coverage_gap) {
     parts.push(
@@ -153,6 +192,17 @@ async function refresh(banner) {
       }),
     );
   }
+  // §6's line ends in the date it is describing, so a stale tab is obvious.
+  parts.push(
+    el("span", {
+      class: "stamp",
+      text: new Date().toLocaleDateString(undefined, {
+        weekday: "short",
+        day: "numeric",
+        month: "short",
+      }),
+    }),
+  );
   banner.className = status.block ? "status blocked" : "status";
   banner.replaceChildren(...parts);
   return status;

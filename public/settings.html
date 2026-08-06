@@ -17,11 +17,19 @@
         <h2>Plan and usage</h2>
         <p id="plan">Loading…</p>
         <p id="trial" class="muted" hidden></p>
-        <ul class="rows" id="caps"></ul>
-        <h3 class="muted">Credits per Group, last 30 days</h3>
-        <ul class="rows" id="burn">
-          <li class="muted">Loading…</li>
-        </ul>
+        <div class="cols-2">
+          <div class="sub-card">
+            <h3>Against your caps</h3>
+            <ul class="rows" id="caps"></ul>
+            <a id="fix-cap" href="/groups" hidden>Fix the Group cap →</a>
+          </div>
+          <div class="sub-card">
+            <h3>Credits, last 30 days</h3>
+            <ul class="rows" id="burn">
+              <li class="muted">Loading…</li>
+            </ul>
+          </div>
+        </div>
         <details id="cancel-box" hidden>
           <summary>Cancel my Plan</summary>
           <div class="form">

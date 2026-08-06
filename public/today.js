@@ -18,8 +18,11 @@ const states = new Map();
 const sourceKey = (s) => `${s.summary_id}|${s.section}|${s.item_index}`;
 
 let summaries = [];
+// Every item in the Brief, in bucket order — the meter counts against this.
+let items = [];
 
 const status = await mount("/today");
+loadRail();
 
 try {
   const [brief, history] = await Promise.all([
@@ -52,12 +55,121 @@ function renderBrief(brief) {
       `${fmtDate(status.coverage_gap.started_at)} and has not resumed.`;
     $("gap").hidden = false;
   }
-  for (const [bucket] of [["needs_action"], ["decided"], ["worth_noting"]]) {
-    const items = brief[bucket];
-    $(bucket).hidden = items.length === 0;
-    $(bucket).querySelector("ul").replaceChildren(...items.map(itemRow));
+  items = [];
+  for (const bucket of ["needs_action", "decided", "worth_noting"]) {
+    const bucketItems = brief[bucket];
+    items.push(...bucketItems);
+    $(bucket).hidden = bucketItems.length === 0;
+    const h2 = $(bucket).querySelector("h2");
+    h2.querySelector(".count")?.remove();
+    h2.append(el("span", { class: "count", text: String(bucketItems.length) }));
+    $(bucket).querySelector("ul").replaceChildren(...bucketItems.map(itemRow));
   }
+  renderMeter();
   if (brief.summary_count === 0) emptyState();
+}
+
+// The Brief has an end and this is where you can see it: one tick per item,
+// filled from the left as they are cleared. Ticks are a count, not a map —
+// which particular items are done is what the rows themselves already say.
+function renderMeter() {
+  const meter = $("meter");
+  meter.hidden = items.length === 0;
+  if (meter.hidden) return;
+  const cleared = items.filter((i) => states.get(sourceKey(i.sources[0]))).length;
+  meter.querySelector(".ticks").replaceChildren(
+    ...items.map((_, i) => el("span", { class: i < cleared ? "on" : null })),
+  );
+  meter.querySelector(".label").textContent = `${cleared} / ${items.length} cleared`;
+}
+
+// §44, §35: the rail. Read-only standing facts — each card ends at the screen
+// that owns the thing, and a failure leaves its own card holding the reason
+// rather than taking the Brief down with it.
+async function loadRail() {
+  fillCard("usage", api("GET", "/v1/usage"), (u) => [
+    meterRow(u.usage.credits_today, u.limits.max_summaries_per_day, "Credits"),
+    meterRow(u.usage.messages_today, u.limits.max_messages_per_day, "messages"),
+    el("p", { class: "muted", text: "Resets 00:00 UTC" }),
+  ]);
+  fillCard("rail-groups", api("GET", "/v1/groups").then((d) => d.groups), (groups) => {
+    const enabled = groups.filter((g) => g.enabled);
+    const heading = el(
+      "div",
+      { class: "rail-head" },
+      el("span", { class: "muted", text: `${enabled.length} of ${groups.length} enabled` }),
+    );
+    const list = el("ul", { class: "rail-groups" });
+    if (enabled.length === 0) {
+      list.append(el("li", { class: "muted", text: "No Group enabled yet." }));
+    } else {
+      for (const g of enabled) {
+        const hasSchedule = !!g.schedule;
+        list.append(
+          el(
+            "li",
+            {},
+            el("span", { class: hasSchedule ? "dot on" : "dot warn" }),
+            el("span", { class: "grow", text: g.name ?? g.external_jid }),
+            el("span", {
+              class: "mono muted",
+              text: hasSchedule ? g.schedule.local_time : "NO TIME",
+            }),
+          ),
+        );
+      }
+    }
+    return [heading, list, el("a", { href: "/groups", text: "Manage Groups →" })];
+  });
+  fillCard("open-reminders", api("GET", "/v1/reminders").then((d) => d.reminders), (list) => {
+    const open = list.filter((r) => r.status === "open");
+    const next = open
+      .filter((r) => r.due_at)
+      .sort((a, b) => a.due_at.localeCompare(b.due_at))[0];
+    return [
+      el(
+        "div",
+        { class: "metric" },
+        el("strong", { text: String(open.length) }),
+        el("span", { class: "muted", text: "confirmed by you" }),
+      ),
+      el("p", {
+        class: "muted",
+        text: next ? `Next: ${next.text} — ${fmtDate(next.due_at)}.` : "Nothing due.",
+      }),
+      el("a", { href: "/lists", text: "Lists →" }),
+    ];
+  });
+}
+
+async function fillCard(id, promise, render) {
+  const card = $(id);
+  const heading = card.querySelector("h3");
+  let children;
+  try {
+    children = render(await promise);
+  } catch (err) {
+    children = [el("p", { class: "muted", text: message(err) })];
+  }
+  card.replaceChildren(heading, ...children);
+}
+
+function meterRow(used, limit, unit) {
+  // The fill is set through the CSSOM, not a style attribute: `style-src
+  // 'self'` (app.ts) blocks the attribute and would leave every bar empty.
+  const fill = el("span");
+  fill.style.width = `${Math.min(100, Math.round((used / limit) * 100))}%`;
+  return el(
+    "div",
+    {},
+    el(
+      "div",
+      { class: "metric" },
+      el("strong", { text: used.toLocaleString() }),
+      el("span", { class: "muted", text: `/ ${limit.toLocaleString()} ${unit}` }),
+    ),
+    el("div", { class: used >= limit ? "bar over" : "bar" }, fill),
+  );
 }
 
 // §25: an empty Brief names what is missing, so the screen is a next step.
@@ -117,22 +229,23 @@ function itemRow(item) {
       onclick: () => setState(li, item, state === next ? null : next),
     });
 
-  const actions = el("div", { class: "actions" }, mark("complete"), mark("dismissed"));
+  const actions = el("div", { class: "actions" });
 
   // §23: only an extracted action item can become a Reminder, and only by
   // this explicit confirmation. A merged item confirms from its first
   // Summary — the text is identical across them, so confirming each would
-  // just make duplicate Reminders.
+  // just make duplicate Reminders. It leads the row and it is the only one in
+  // the accent: keeping a thing is the decision, clearing it is the default.
   const action = item.sources.find((s) => s.section === "action_items");
   if (action) {
     actions.append(
       el("button", {
-        class: "secondary",
         text: "Confirm as reminder",
         onclick: (e) => confirmReminder(e.target, action),
       }),
     );
   }
+  actions.append(mark("complete"), mark("dismissed"));
 
   li.append(el("div", { class: "grow" }, el("p", { text: item.text }), chips), actions);
   // §20: the exact messages this item was drawn from, on demand.
@@ -159,6 +272,7 @@ async function setState(li, item, next) {
     else states.set(sourceKey(s), next);
   }
   li.className = next ? `item ${next}` : "item";
+  renderMeter();
   for (const b of li.querySelectorAll(".actions button")) {
     if (b.textContent === "Done") b.setAttribute("aria-pressed", next === "complete");
     if (b.textContent === "Dismiss") b.setAttribute("aria-pressed", next === "dismissed");

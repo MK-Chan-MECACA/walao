@@ -49,6 +49,10 @@
 
   --font-heading: "Inter", system-ui, sans-serif;
   --font-body: "Inter", system-ui, sans-serif;
+  /* Dashboard, 2a — the second face: every number, timestamp, id and section
+     label is set in mono so a fact never reads as prose. No webfont for the
+     same reason as Inter (F1/F2): the stack is what the OS already has. */
+  --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace;
 
   --space-1: 2.8px;
   --space-2: 5.6px;
@@ -81,35 +85,35 @@ body {
   font: 400 15px/1.55 var(--font-body);
 }
 
-body > header,
+/* Dashboard, 2a — the shell: the status line spans the whole content column
+   and rules it off, so it reads as the app's own chrome rather than as the
+   first card of whatever page is under it. Only <main> is centred. */
+body > header {
+  display: block;
+}
+
 body > main {
   max-width: 1080px;
   margin: 0 auto;
-  padding: 0 var(--space-8);
+  padding: 26px 28px 64px;
 }
 
-body > header {
-  padding-top: var(--space-8);
-}
-
-body > main {
-  padding-top: var(--space-8);
-  padding-bottom: 67.2px;
-}
-
-/* Page title and its one-line meta, per screen. */
+/* Page title and its one-line meta, per screen. The title is the largest type
+   in the app by a wide margin — you should know which of the six screens you
+   are on before reading a word of the body. */
 h1 {
   font-family: var(--font-heading);
   font-weight: 500;
-  font-size: 22px;
-  line-height: 1.12;
-  letter-spacing: -0.015em;
-  margin: 0 0 var(--space-1);
+  font-size: 34px;
+  line-height: 1.05;
+  letter-spacing: -0.025em;
+  margin: 0 0 var(--space-2);
 }
 
 h1 + p {
-  margin: 0 0 var(--space-6);
-  font-size: 13px;
+  margin: 0 0 var(--space-8);
+  font-size: 13.5px;
+  color: color-mix(in srgb, var(--color-text) 55%, transparent);
 }
 
 h2 {
@@ -120,12 +124,19 @@ h2 {
   margin: 0;
 }
 
+/* A card's own label — mono, small, quiet. Never competes with the h1. */
 h3 {
-  font-size: 11px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
   font-weight: 400;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  margin: var(--space-2) 0 0;
+  color: color-mix(in srgb, var(--color-text) 55%, transparent);
+  margin: 0;
+}
+
+.mono {
+  font-family: var(--font-mono);
 }
 
 p {
@@ -186,18 +197,75 @@ a:hover {
 
 #chrome nav a[aria-current="page"] {
   color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 10%, transparent);
 }
 
-/* Brand CI, 02 — Logo: the wordmark is set, not drawn. Inter 600, -0.035em,
-   all caps. text-transform is here so "Walao" typed into the markup still comes
-   out as the wordmark rather than as a misuse. */
+/* Brand CI, 02 — Lockup A: the mark, then the wordmark, on one baseline. The
+   wordmark is set, not drawn: Inter 600, -0.035em, all caps. text-transform is
+   here so "Walao" typed into the markup still comes out as the wordmark. */
 .nav-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
   font-family: var(--font-heading);
   font-weight: 600;
   font-size: 17px;
   letter-spacing: -0.035em;
   text-transform: uppercase;
-  padding: 0 var(--space-4) var(--space-4);
+  padding: 0 var(--space-4) var(--space-8);
+}
+
+/* The mark: three rules, longest to shortest — a Group's traffic reduced to a
+   Brief. Drawn in CSS so it needs no request and inherits the accent. */
+.nav-mark {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  border-radius: var(--radius-sm);
+  background: var(--color-accent);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2.4px;
+  padding: 0 4px;
+}
+
+.nav-mark i {
+  height: 1.7px;
+  border-radius: 1px;
+  background: var(--color-bg);
+}
+
+.nav-mark i:nth-child(2) {
+  width: 64%;
+}
+
+.nav-mark i:nth-child(3) {
+  width: 30%;
+}
+
+/* Plan, pinned to the foot of the rail — what you are paying for and how long
+   is context for every screen, so it is not filed under Settings. */
+.nav-plan {
+  margin-top: auto;
+  padding: var(--space-4) var(--space-4) 0;
+  border-top: 1px solid var(--color-divider);
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 13px;
+}
+
+.nav-plan h3 {
+  letter-spacing: 0.1em;
+}
+
+.nav-plan p {
+  margin: 0;
+}
+
+.nav-plan .muted {
+  font-size: 11.5px;
 }
 
 @media (min-width: 860px) {
@@ -222,7 +290,6 @@ a:hover {
     padding-bottom: 56px;
   }
 
-  body > header,
   body > main {
     padding-inline: var(--space-6);
   }
@@ -242,23 +309,26 @@ a:hover {
     font-size: 11.5px;
   }
 
-  .nav-brand {
+  .nav-brand,
+  .nav-plan {
     display: none;
   }
 }
 
-/* Status banner — §6's one line, in the ok or the blocked ground. */
+/* Status line — §6's one line, ruled off across the top of every authenticated
+   screen. One line, always in the same place: the app never re-teaches you
+   where "is WALAO working?" is answered. It scrolls sideways rather than
+   wrapping, so the shell keeps its height whatever the block reason says. */
 .status {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-3) var(--space-4);
-  border-radius: var(--radius-md);
-  margin: var(--space-6) 0 0;
-  font-size: 13px;
-  background: var(--color-surface);
-  box-shadow: var(--shadow-sm);
+  gap: var(--space-4);
+  padding: var(--space-6) 28px;
+  font-size: 12.5px;
+  white-space: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+  box-shadow: inset 0 -1px 0 var(--color-divider);
 }
 
 .status.blocked {
@@ -268,8 +338,8 @@ a:hover {
 }
 
 .status .dot {
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
   flex: none;
   border-radius: 50%;
   background: var(--color-accent);
@@ -280,13 +350,35 @@ a:hover {
 }
 
 .status .muted {
+  font-size: 12.5px;
+}
+
+/* The date, right-aligned and mono — the only thing on the line that is a
+   fact rather than a state. */
+.status .stamp {
   margin-left: auto;
-  font-size: 12px;
+  padding-left: var(--space-6);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--color-text) 55%, transparent);
+}
+
+.status.blocked .stamp {
+  color: inherit;
+  opacity: 0.75;
 }
 
 .status.blocked a {
   color: currentColor;
   text-decoration: underline;
+}
+
+@media (max-width: 859px) {
+  .status {
+    padding-inline: var(--space-6);
+  }
 }
 
 /* Cards */
@@ -470,6 +562,27 @@ form :is(input, select),
   flex: 1 1 9rem;
 }
 
+/* Dashboard, 2a — Settings: two equal columns for caps vs per-Group credits.
+   Each sub-card sits on the card's own surface so the split reads as two
+   panels inside one card, not two separate cards. */
+.cols-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4);
+}
+
+.sub-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+@media (max-width: 700px) {
+  .cols-2 {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* Segmented control — sign-up / log in. */
 .tabs {
   display: inline-flex;
@@ -550,8 +663,16 @@ ul.rows li {
   gap: var(--space-4);
   align-items: flex-start;
   justify-content: space-between;
-  padding: var(--space-4) 0;
+  padding: var(--space-4);
+  margin-inline: calc(-1 * var(--space-4));
+  border-radius: var(--radius-md);
   box-shadow: inset 0 1px 0 var(--color-divider);
+}
+
+/* The row you are pointing at lifts by 3% — enough to track which of seven
+   items your cursor is on, not enough to read as a selection. */
+ul.rows li:hover {
+  background: color-mix(in srgb, var(--color-text) 3%, transparent);
 }
 
 ul.rows li .grow {
@@ -581,6 +702,33 @@ li:is(.enabled, .off, .blocked) .grow > .muted {
   font-size: 12.5px;
 }
 
+/* Dashboard, 2a — Groups: a status dot beside the name so enabled/off/blocked
+   reads at a glance without needing the label text. */
+.row-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.row-head .dot {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: 50%;
+}
+
+.row-head .dot.on {
+  background: var(--color-accent);
+}
+
+.row-head .dot.off {
+  background: var(--color-neutral-800);
+}
+
+li.blocked .row-head .dot {
+  background: var(--warn-ink);
+}
+
 li.blocked {
   background: var(--warn-bg);
   color: var(--warn-ink);
@@ -607,6 +755,233 @@ li.blocked .muted {
 
 .item.dismissed .grow {
   opacity: 0.5;
+}
+
+/* Dashboard, 2a — Today. The Brief's three buckets are not cards: a card says
+   "this is a thing you manage", and a Brief item is a thing you clear. They
+   are ruled lists under a mono section label, so the page reads as one column
+   to work down. Needs action is the only one in the accent — the other two are
+   there to be scanned, not acted on.
+   ponytail: Groups and Lists keep card-wrapped rows rather than the design's
+   one-card-per-row; the row treatment is the same either way. Split them out
+   if a row ever needs to carry its own state at rest. */
+.bucket {
+  background: none;
+  box-shadow: none;
+  padding: 0;
+  margin-bottom: var(--space-8);
+}
+
+.bucket > h2,
+.rail h2 {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--color-text) 55%, transparent);
+}
+
+#needs_action > h2 {
+  color: var(--color-accent);
+}
+
+/* Every bucket says how many, beside its name. */
+.count {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: color-mix(in srgb, var(--color-text) 55%, transparent);
+  margin-left: var(--space-3);
+}
+
+/* Triage meter — one tick per Brief item, filled as you clear it. The Brief is
+   finite and this is the proof: you can see the end of it from the top. */
+.meter {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  margin: 0 0 var(--space-8);
+}
+
+.meter .ticks {
+  display: flex;
+  gap: 3px;
+  flex: 1 1 auto;
+}
+
+.meter .ticks span {
+  height: 4px;
+  flex: 1 1 0;
+  border-radius: 2px;
+  background: var(--color-neutral-800);
+}
+
+.meter .ticks span.on {
+  background: var(--color-accent);
+}
+
+.meter .label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  margin: 0;
+  color: color-mix(in srgb, var(--color-text) 55%, transparent);
+}
+
+/* The three buckets are three weights of the same voice: an item you must act
+   on is set at reading size, a decision at row size, and a note below both. */
+#needs_action ul.rows li .grow p {
+  font-size: 16px;
+  line-height: 1.45;
+  letter-spacing: -0.006em;
+}
+
+#worth_noting ul.rows li .grow p {
+  font-size: 13.5px;
+  color: color-mix(in srgb, var(--color-text) 55%, transparent);
+}
+
+/* The Brief column and its rail of standing facts. The rail is what is true
+   today; the column is what you do about it. */
+.with-rail {
+  display: flex;
+  gap: 28px;
+  align-items: flex-start;
+}
+
+.with-rail > .brief {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.rail {
+  width: 266px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.rail .card {
+  margin: 0;
+  gap: var(--space-4);
+}
+
+/* Dashboard, 2a — Groups at a glance in the Today rail: one row per enabled
+   Group, a green dot, the name and its schedule time. A Group without a
+   schedule set gets the amber treatment — it is enabled but silent. */
+.rail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.rail-groups {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.rail-groups li {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 0;
+  box-shadow: inset 0 1px 0 var(--color-divider);
+}
+
+.rail-groups li:first-child {
+  box-shadow: none;
+}
+
+.rail-groups .dot {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: 50%;
+}
+
+.rail-groups .dot.on {
+  background: var(--color-accent);
+}
+
+.rail-groups .dot.warn {
+  background: var(--warn-ink);
+}
+
+.rail-groups .grow {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rail-groups .mono {
+  font-size: 10.5px;
+  white-space: nowrap;
+}
+
+.rail-groups .muted {
+  font-size: 10.5px;
+}
+
+.rail-groups .dot.warn ~ .mono {
+  color: var(--warn-ink);
+}
+
+@media (max-width: 1000px) {
+  .with-rail {
+    flex-direction: column;
+  }
+
+  .rail {
+    width: 100%;
+  }
+}
+
+/* A number against its cap: the figure in mono at reading size, the ceiling
+   beside it in prose, the bar underneath. */
+.metric {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.metric > strong {
+  font-family: var(--font-mono);
+  font-weight: 400;
+  font-size: 22px;
+  letter-spacing: -0.02em;
+}
+
+.metric > .muted {
+  font-size: 12px;
+}
+
+.bar {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--color-neutral-800);
+  overflow: hidden;
+  margin-top: var(--space-2);
+}
+
+.bar > span {
+  display: block;
+  height: 100%;
+  background: var(--color-accent);
+}
+
+/* Past the cap the bar is the same bar in the warning ink — a full bar and an
+   over-full bar must not look alike. */
+.bar.over > span {
+  background: var(--warn-ink);
 }
 
 /* Disclosures — a caret instead of the platform marker, so the row reads as
@@ -648,7 +1023,8 @@ details[open] > summary::before {
 }
 
 .source .muted {
-  font-size: 11px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
 }
 
 /* Chips — a Group tag reads as a label, the WhatsApp jump as a link. */
