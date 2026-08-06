@@ -151,18 +151,46 @@ button.cta[disabled] {
   line-height: 1.55;
 }
 
-.terms > strong {
+/* Terms disclosure — text collapsed behind a clickable summary. */
+.terms-detail {
+  margin-bottom: 12px;
+}
+
+.terms-detail summary {
+  cursor: pointer;
+  list-style: none;
+  font-size: 13.5px;
+  color: var(--ink);
+}
+
+.terms-detail summary strong {
   font-weight: 600;
   font-size: 14px;
 }
 
-.terms > .muted {
+.terms-detail summary .muted {
   font-size: 11px;
   margin-left: 4px;
+  color: var(--ink-faint);
 }
 
-.terms p {
-  margin: 10px 0;
+.terms-detail summary::-webkit-details-marker {
+  display: none;
+}
+
+.terms-detail summary::before {
+  content: "▸ ";
+  font-size: 10px;
+  color: var(--ink-faint);
+  transition: transform 0.3s var(--ease);
+}
+
+.terms-detail[open] summary::before {
+  content: "▾ ";
+}
+
+.terms-detail p {
+  margin: 12px 0 0;
   max-height: 11rem;
   overflow-y: auto;
   font-size: 13px;
