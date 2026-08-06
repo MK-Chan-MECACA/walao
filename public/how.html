@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>WALAO — how it works</title>
+    <meta
+      name="description"
+      content="A 27-second sequence showing what WALAO does with a WhatsApp group: read only what you enabled, separate decisions from noise, link every claim to its message, deliver one brief."
+    />
+    <link rel="icon" href="/favicon.svg" />
+    <link rel="stylesheet" href="/site.css" />
+  </head>
+  <body>
+    <header>
+      <nav class="nav">
+        <a class="brand" href="/">
+          <img src="/favicon.svg" alt="" width="26" height="26" />WALAO
+        </a>
+        <div class="nav-links">
+          <a href="/features">Features</a>
+          <a href="/how" aria-current="page">How it works</a>
+          <a href="/pricing">Pricing</a>
+          <a href="/security">Privacy</a>
+        </div>
+        <a class="cta" href="/signin">Sign in<span class="cta__icon" aria-hidden="true">↗</span></a>
+        <button class="burger" type="button" aria-expanded="false" aria-controls="menu" aria-label="Open menu">
+          <span></span><span></span>
+        </button>
+      </nav>
+      <div class="menu" id="menu" data-open="false">
+        <a href="/features">Features</a>
+        <a href="/how">How it works</a>
+        <a href="/pricing">Pricing</a>
+        <a href="/security">Privacy</a>
+      </div>
+    </header>
+
+    <main>
+      <!-- The frame renders at exactly 1080x1920 at 30fps and is scaled down by
+           CSS to fit the screen. That is deliberate: a screen recording of this
+           page is the 9:16 social cut, with no resampling and no export step. -->
+      <section class="export">
+        <span class="eyebrow">The sequence</span>
+        <div class="shell frame">
+          <div class="core">
+            <canvas data-explainer="export" aria-hidden="true"></canvas>
+          </div>
+        </div>
+        <p class="export-meta">
+          <span>1080 × 1920</span><span>30 fps</span><span>27 seconds</span><span>Loops</span>
+        </p>
+      </section>
+
+      <section class="band">
+        <div class="bento">
+          <div class="c5 band-head reveal">
+            <span class="eyebrow">In words</span>
+            <h2>Six beats, and what each one is claiming.</h2>
+            <p class="lead">
+              The animation is not decoration for a product that does something else. Each beat is a
+              thing WALAO actually does, in the order it does it.
+            </p>
+            <p class="actions">
+              <a class="cta" href="/signin">Start free<span class="cta__icon" aria-hidden="true">↗</span></a>
+            </p>
+          </div>
+          <div class="c7 bento reveal d1">
+            <div class="c12 shell">
+              <div class="core">
+                <p class="index">01 · Input</p>
+                <h3>Only the groups you switched on</h3>
+                <p>
+                  Four group names, a message count each. Nothing else in WhatsApp reaches the system
+                  at all — not a direct message, not a group you left disabled.
+                </p>
+              </div>
+            </div>
+            <div class="c12 shell">
+              <div class="core">
+                <p class="index">02 · Analysis</p>
+                <h3>The day's traffic, group by group</h3>
+                <p>
+                  The particles converging are the day's messages. Each enabled group is summarised
+                  on its own schedule, in its own timezone.
+                </p>
+              </div>
+            </div>
+            <div class="c12 shell">
+              <div class="core">
+                <p class="index">03 · Sorting</p>
+                <h3>Decisions and actions, separated from noise</h3>
+                <p>
+                  Three clusters: what needs you, what was decided, what is merely worth noting. Most
+                  of the traffic ends up in none of them, which is the point.
+                </p>
+              </div>
+            </div>
+            <div class="c12 shell">
+              <div class="core">
+                <p class="index">04 · Sourcing</p>
+                <h3>Every claim linked to its message</h3>
+                <p>
+                  The selection box closing on one cluster is a question being answered. The answer
+                  carries the messages it was built from, so you can check it.
+                </p>
+              </div>
+            </div>
+            <div class="c12 shell accent">
+              <div class="core">
+                <p class="index">05 · Result</p>
+                <h3>One brief, five things, one minute</h3>
+                <p>
+                  Needs you, decided, worth noting — merged across every group, duplicates collapsed,
+                  sources still attached.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="band">
+        <div class="bento">
+          <div class="c12 reveal">
+            <p class="warn">
+              <strong>WALAO is in private beta.</strong> It connects to WhatsApp through an
+              unofficial gateway, which may breach WhatsApp's Terms of Service and can lead to an
+              account being suspended. Pair a spare number, not the one your business runs on. The
+              full picture is on <a href="/security">Privacy &amp; security</a>.
+            </p>
+          </div>
+          <div class="c12 shell accent reveal d1">
+            <div class="core wide">
+              <span class="eyebrow">Start</span>
+              <h2>Understand every group in one minute.</h2>
+              <p class="lead">Off by default. You choose the groups. Free while the beta runs.</p>
+              <p class="actions">
+                <a class="cta" href="/signin">Try it free<span class="cta__icon" aria-hidden="true">↗</span></a>
+                <a class="cta ghost" href="/features">See what it does<span class="cta__icon" aria-hidden="true">→</span></a>
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-foot">
+      <div class="foot-top">
+        <p class="foot-mark">WALAO</p>
+        <nav class="foot-nav">
+          <a href="/features">Features</a>
+          <a href="/how">How it works</a>
+          <a href="/pricing">Pricing</a>
+          <a href="/security">Privacy &amp; security</a>
+          <a href="/signin">Sign in</a>
+        </nav>
+      </div>
+      <p class="foot-fine">
+        WALAO — WhatsApp AI Life Assistant and Organizer. Not affiliated with or endorsed by
+        WhatsApp or Meta.
+      </p>
+    </footer>
+
+    <script type="module" src="/site.js"></script>
+  </body>
+</html>

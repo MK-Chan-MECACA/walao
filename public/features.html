@@ -9,149 +9,231 @@
       content="What WALAO does today: per-group daily summaries with citations, a merged Today Brief, sourced question answering, reminders, confirmed memories and full privacy controls."
     />
     <link rel="icon" href="/favicon.svg" />
-    <link rel="stylesheet" href="/app.css" />
+    <link rel="stylesheet" href="/site.css" />
   </head>
   <body>
-    <header class="site-head">
-      <a class="site-brand" href="/">
-        <img src="/favicon.svg" alt="" width="30" height="30" />WALAO
-      </a>
-      <nav class="site-nav">
-        <a href="/features" aria-current="page">Features</a>
+    <header>
+      <nav class="nav">
+        <a class="brand" href="/">
+          <img src="/favicon.svg" alt="" width="26" height="26" />WALAO
+        </a>
+        <div class="nav-links">
+          <a href="/features" aria-current="page">Features</a>
+          <a href="/how">How it works</a>
+          <a href="/pricing">Pricing</a>
+          <a href="/security">Privacy</a>
+        </div>
+        <a class="cta" href="/signin">Sign in<span class="cta__icon" aria-hidden="true">↗</span></a>
+        <button class="burger" type="button" aria-expanded="false" aria-controls="menu" aria-label="Open menu">
+          <span></span><span></span>
+        </button>
+      </nav>
+      <div class="menu" id="menu" data-open="false">
+        <a href="/features">Features</a>
+        <a href="/how">How it works</a>
         <a href="/pricing">Pricing</a>
         <a href="/security">Privacy</a>
-        <a class="btn" href="/signin">Sign in</a>
-      </nav>
+      </div>
     </header>
 
-    <main class="site">
-      <section class="site-hero">
-        <h1>What WALAO does</h1>
-        <p>
-          Everything on this page is built and running today. There is no roadmap section here —
-          when something ships, it appears; until then it does not.
-        </p>
+    <main>
+      <section class="band hero">
+        <div class="bento">
+          <div class="c7 hero-copy">
+            <span class="eyebrow">Features</span>
+            <h1>What WALAO does.</h1>
+            <p class="lead">
+              Everything on this page is built and running today. There is no roadmap section here —
+              when something ships, it appears; until then it does not.
+            </p>
+            <p class="actions">
+              <a class="cta" href="/signin">Start free<span class="cta__icon" aria-hidden="true">↗</span></a>
+              <a class="cta ghost" href="/how">Watch the sequence<span class="cta__icon" aria-hidden="true">→</span></a>
+            </p>
+          </div>
+        </div>
       </section>
 
-      <section class="site-section">
-        <h2>Reading</h2>
-        <ul class="site-grid">
-          <li class="card">
-            <strong>Group selection</strong>
-            <p>
-              Enable groups one at a time. A group that is not enabled never reaches the processing
-              layer at all — it is not stored, summarised or searchable. Disabling one stops it
-              immediately.
-            </p>
-          </li>
-          <li class="card">
-            <strong>Daily group summaries</strong>
-            <p>
-              Each enabled group gets its own summary at a time and timezone you set for it:
-              highlights, decisions, action items, dates and open questions. Every item names the
-              messages it was drawn from.
-            </p>
-          </li>
-          <li class="card">
-            <strong>Today Brief</strong>
-            <p>
-              All of your groups merged and ranked into three buckets — needs you, decided, worth
-              noting. Duplicates across groups are merged, and the sources stay visible. Delivered
-              in the app, and optionally as a private WhatsApp message to yourself.
-            </p>
-          </li>
-          <li class="card">
-            <strong>Ask WALAO</strong>
-            <p>
-              Ask in your own words — <em>"what did the procurement group decide yesterday?"</em> —
-              and get an answer built only from groups you approved and data still inside your
-              retention window, with the messages it relied on attached.
-            </p>
-          </li>
-        </ul>
+      <section class="band">
+        <div class="band-head reveal">
+          <span class="eyebrow">Reading</span>
+          <h2>It reads what you allowed, and reports what it found.</h2>
+        </div>
+        <div class="bento">
+          <div class="c5 shell reveal">
+            <div class="core wide">
+              <p class="index">01</p>
+              <h3>Group selection</h3>
+              <p>
+                Enable groups one at a time. A group that is not enabled never reaches the processing
+                layer at all — it is not stored, summarised or searchable. Disabling one stops it
+                immediately.
+              </p>
+            </div>
+          </div>
+          <div class="c7 shell reveal d1">
+            <div class="core wide">
+              <p class="index">02</p>
+              <h3>Daily group summaries</h3>
+              <p>
+                Each enabled group gets its own summary at a time and timezone you set for it:
+                highlights, decisions, action items, dates and open questions. Every item names the
+                messages it was drawn from.
+              </p>
+            </div>
+          </div>
+          <div class="c7 shell accent reveal d2">
+            <div class="core wide">
+              <p class="index">03</p>
+              <h3>Today Brief</h3>
+              <p>
+                All of your groups merged and ranked into three buckets — needs you, decided, worth
+                noting. Duplicates across groups are merged, and the sources stay visible. Delivered
+                in the app, and optionally as a private WhatsApp message to yourself.
+              </p>
+            </div>
+          </div>
+          <div class="c5 shell reveal d3">
+            <div class="core wide">
+              <p class="index">04</p>
+              <h3>Ask WALAO</h3>
+              <p>
+                Ask in your own words — <em>“what did the procurement group decide yesterday?”</em> —
+                and get an answer built only from groups you approved and data still inside your
+                retention window, with the messages it relied on attached.
+              </p>
+            </div>
+          </div>
+        </div>
       </section>
 
-      <section class="site-section">
-        <h2>Acting</h2>
-        <ul class="site-grid">
-          <li class="card">
-            <strong>Reminders</strong>
-            <p>
-              Turn an action item into a reminder with an owner and a due date. Nothing becomes a
-              reminder because a message said so — it takes your confirmation.
+      <section class="band">
+        <div class="bento">
+          <div class="c5 band-head reveal">
+            <span class="eyebrow">Acting</span>
+            <h2>Nothing happens because a message said so.</h2>
+            <p class="lead">
+              Both of these take your confirmation. A group cannot create a reminder, and it cannot
+              teach WALAO a fact about you.
             </p>
-          </li>
-          <li class="card">
-            <strong>Confirmed memories</strong>
-            <p>
-              Facts worth keeping past the retention window are proposed as candidates first. You
-              confirm, edit or discard. Nothing is remembered long-term behind your back.
-            </p>
-          </li>
-        </ul>
+          </div>
+          <div class="c7 bento reveal d1">
+            <div class="c12 shell">
+              <div class="core">
+                <h3>Reminders</h3>
+                <p>
+                  Turn an action item into a reminder with an owner and a due date. Nothing becomes a
+                  reminder because a message said so — it takes your confirmation.
+                </p>
+              </div>
+            </div>
+            <div class="c12 shell">
+              <div class="core">
+                <h3>Confirmed memories</h3>
+                <p>
+                  Facts worth keeping past the retention window are proposed as candidates first. You
+                  confirm, edit or discard. Nothing is remembered long-term behind your back.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
       </section>
 
-      <section class="site-section">
-        <h2>Being honest with you</h2>
-        <ul class="site-grid">
-          <li class="card">
-            <strong>Coverage gaps</strong>
-            <p>
-              If the WhatsApp connection dropped, the brief says which window it could not see.
-              A summary never pretends to be complete when it isn't.
-            </p>
-          </li>
-          <li class="card">
-            <strong>Connection health</strong>
-            <p>
-              One banner, everywhere, says whether the connection is live, disconnected or needs
-              re-pairing — in the same words on every screen.
-            </p>
-          </li>
-          <li class="card">
-            <strong>Privacy controls</strong>
-            <p>
-              Set retention between 1 and 30 days, pause all processing, export everything, or
-              delete your account. Each of those is recorded and verifiable.
-            </p>
-          </li>
-          <li class="card">
-            <strong>Group messages are untrusted input</strong>
-            <p>
-              Text inside a group cannot change WALAO's rules or make it take an action. A message
-              is something to summarise, never an instruction to follow.
-            </p>
-          </li>
-        </ul>
+      <section class="band">
+        <div class="band-head reveal">
+          <span class="eyebrow">Being honest with you</span>
+          <h2>A summary that pretends to be complete is worse than no summary.</h2>
+        </div>
+        <div class="bento">
+          <div class="c4 shell reveal">
+            <div class="core">
+              <h3>Coverage gaps</h3>
+              <p>
+                If the WhatsApp connection dropped, the brief says which window it could not see. A
+                summary never pretends to be complete when it isn't.
+              </p>
+            </div>
+          </div>
+          <div class="c4 shell reveal d1">
+            <div class="core">
+              <h3>Connection health</h3>
+              <p>
+                One banner, everywhere, says whether the connection is live, disconnected or needs
+                re-pairing — in the same words on every screen.
+              </p>
+            </div>
+          </div>
+          <div class="c4 shell reveal d2">
+            <div class="core">
+              <h3>Privacy controls</h3>
+              <p>
+                Set retention between 1 and 30 days, pause all processing, export everything, or
+                delete your account. Each of those is recorded and verifiable.
+              </p>
+            </div>
+          </div>
+          <div class="c12 shell reveal d3">
+            <div class="core wide">
+              <h3>Group messages are untrusted input</h3>
+              <p>
+                Text inside a group cannot change WALAO's rules or make it take an action. A message
+                is something to summarise, never an instruction to follow.
+              </p>
+            </div>
+          </div>
+        </div>
       </section>
 
-      <section class="site-section">
-        <h2>What WALAO deliberately does not do</h2>
-        <ul class="site-list">
-          <li>It does not reply in your groups on your behalf.</li>
-          <li>It does not send bulk or marketing messages.</li>
-          <li>It does not import history from before you connected.</li>
-          <li>It does not read images, voice notes, video or documents.</li>
-          <li>It does not post your private brief back into a group.</li>
-        </ul>
-        <p class="site-actions">
-          <a class="btn" href="/signin">Sign up</a>
-          <a class="btn ghost" href="/pricing">See the plans</a>
-        </p>
+      <section class="band">
+        <div class="bento">
+          <div class="c5 band-head reveal">
+            <span class="eyebrow">Boundaries</span>
+            <h2>What WALAO deliberately does not do.</h2>
+          </div>
+          <div class="c7 shell reveal d1">
+            <div class="core wide">
+              <ul class="ticks plain">
+                <li>It does not reply in your groups on your behalf.</li>
+                <li>It does not send bulk or marketing messages.</li>
+                <li>It does not import history from before you connected.</li>
+                <li>It does not read images, voice notes, video or documents.</li>
+                <li>It does not post your private brief back into a group.</li>
+              </ul>
+            </div>
+          </div>
+          <div class="c12 shell accent reveal d2">
+            <div class="core wide">
+              <span class="eyebrow">Start</span>
+              <h2>Understand every group in one minute.</h2>
+              <p class="lead">Free while the beta runs. Every group off until you say otherwise.</p>
+              <p class="actions">
+                <a class="cta" href="/signin">Try it free<span class="cta__icon" aria-hidden="true">↗</span></a>
+                <a class="cta ghost" href="/pricing">See the plans<span class="cta__icon" aria-hidden="true">→</span></a>
+              </p>
+            </div>
+          </div>
+        </div>
       </section>
     </main>
 
     <footer class="site-foot">
-      <p><strong>WALAO</strong> — WhatsApp AI Life Assistant and Organizer.</p>
-      <nav>
-        <a href="/features">Features</a>
-        <a href="/pricing">Pricing</a>
-        <a href="/security">Privacy &amp; security</a>
-        <a href="/signin">Sign in</a>
-      </nav>
-      <p class="muted">
-        WALAO is not affiliated with or endorsed by WhatsApp or Meta.
+      <div class="foot-top">
+        <p class="foot-mark">WALAO</p>
+        <nav class="foot-nav">
+          <a href="/features">Features</a>
+          <a href="/how">How it works</a>
+          <a href="/pricing">Pricing</a>
+          <a href="/security">Privacy &amp; security</a>
+          <a href="/signin">Sign in</a>
+        </nav>
+      </div>
+      <p class="foot-fine">
+        WALAO — WhatsApp AI Life Assistant and Organizer. Not affiliated with or endorsed by
+        WhatsApp or Meta.
       </p>
     </footer>
+
+    <script type="module" src="/site.js"></script>
   </body>
 </html>

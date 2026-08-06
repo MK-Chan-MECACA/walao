@@ -183,6 +183,7 @@ test("the app's own assets are served with the content types a browser needs", a
   for (const [path, type] of [
     ["/", /^text\/html/],
     ["/features", /^text\/html/],
+    ["/how", /^text\/html/],
     ["/pricing", /^text\/html/],
     ["/security", /^text\/html/],
     ["/signin", /^text\/html/],
@@ -194,8 +195,16 @@ test("the app's own assets are served with the content types a browser needs", a
     ["/settings", /^text\/html/],
     ["/ops", /^text\/html/],
     ["/app.css", /^text\/css/],
+    ["/site.css", /^text\/css/],
     ["/api.js", /^text\/javascript/],
     ["/layout.js", /^text\/javascript/],
+    ["/site.js", /^text\/javascript/],
+    // The explainer imports the vendored three.js by absolute path; a wrong
+    // MIME here is a module the browser refuses to execute, and the marketing
+    // hero silently falls back to nothing.
+    ["/explainer.js", /^text\/javascript/],
+    ["/vendor/three.module.min.js", /^text\/javascript/],
+    ["/vendor/three.core.min.js", /^text\/javascript/],
   ] as const) {
     const res = await raw("GET", path);
     assert.equal(res.status, 200, path);

@@ -1,0 +1,973 @@
+/* The marketing site — /, /features, /pricing, /security, /how.
+
+   Deliberately not app.css. The product's Nocturne system is tuned for dense
+   operational screens: 15px body, 8px radii, hairline dividers, everything
+   close together. A landing page has the opposite job, so it gets its own
+   sheet rather than a pile of overrides fighting the app's defaults. The two
+   share only the brand: the same green, the same mark, the same wordmark
+   treatment. Nothing here is loaded by a signed-in screen.
+
+   Structure: near-black ground with a fixed mesh glow and film grain, glass
+   chrome, and every panel built as an outer shell holding an inner core so a
+   card reads as a machined object rather than a rectangle with a border.
+   --------------------------------------------------------------------------- */
+
+:root {
+  --bg: #050505;
+  --ink: #ededf0;
+  --ink-soft: #a7abb8;
+  --ink-faint: #6f7383;
+
+  /* Brand CI, 02 — the accent is WhatsApp's green, OKLCH hue 152, same ramp as
+     the app. The marketing pages use three steps of it and no other hue. */
+  --accent: oklch(0.766 0.176 152);
+  --accent-soft: oklch(0.86 0.12 152);
+  --accent-deep: oklch(0.44 0.098 152);
+  --accent-ink: #04180c;
+
+  /* Surfaces are alpha over the ground, never opaque greys — that is what lets
+     the mesh glow behind them show through the chrome. */
+  --shell: rgba(255, 255, 255, 0.035);
+  --hair: rgba(255, 255, 255, 0.075);
+  --hair-strong: rgba(255, 255, 255, 0.14);
+  --core-top: rgba(23, 24, 29, 0.86);
+  --core-bottom: rgba(9, 9, 11, 0.9);
+
+  /* No Inter, no webfont, no third-party origin: the CSP is `font-src 'self'`
+     and shipping a 200KB face to render eight headings is not a trade worth
+     making. system-ui is SF Pro, Segoe or Roboto depending on where you are —
+     all three are better than a fallback nobody chose. */
+  --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, "Cascadia Mono", monospace;
+
+  --page: 1180px;
+  --gutter: clamp(20px, 4vw, 48px);
+  --band: clamp(104px, 13vw, 184px);
+
+  --r-shell: 30px;
+  --r-core: 23px; /* concentric with --r-shell minus the 7px bezel */
+  --r-pill: 999px;
+
+  /* One easing curve for the whole site. Heavy at the start, settles at the
+     end — motion with mass, not a linear slide. */
+  --ease: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 400 17px/1.65 var(--sans);
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+/* The ground: two very low-chroma orbs, fixed, behind everything. They are what
+   stops a near-black page from looking like an unloaded stylesheet. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(58vw 46vw at 12% -6%, oklch(0.44 0.098 152 / 0.3), transparent 62%),
+    radial-gradient(44vw 40vw at 92% 18%, oklch(0.5 0.06 200 / 0.16), transparent 66%),
+    radial-gradient(70vw 50vw at 50% 108%, oklch(0.44 0.098 152 / 0.14), transparent 68%);
+}
+
+/* Film grain, fixed and inert, so it never repaints with the scroll. The noise
+   is an inline SVG turbulence — a data: URL, which the CSP already allows for
+   images because the pairing QR is one. */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  pointer-events: none;
+  opacity: 0.05;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+main,
+.site-foot {
+  position: relative;
+  z-index: 1;
+}
+
+/* ---------------------------------------------------------------------------
+   Chrome — a floating glass island, detached from the top edge.
+   --------------------------------------------------------------------------- */
+
+.nav {
+  position: fixed;
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  padding: 7px 7px 7px 18px;
+  border-radius: var(--r-pill);
+  background: rgba(10, 10, 12, 0.66);
+  backdrop-filter: blur(22px) saturate(150%);
+  -webkit-backdrop-filter: blur(22px) saturate(150%);
+  box-shadow:
+    inset 0 0 0 1px var(--hair),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 24px 48px -28px #000;
+}
+
+/* Lockup A — mark, then wordmark, one bar height between them. */
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  margin-right: 12px;
+  font-weight: 600;
+  font-size: 17px;
+  letter-spacing: -0.035em;
+  text-transform: uppercase;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.brand img {
+  width: 26px;
+  height: 26px;
+}
+
+.nav-links {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.nav-links a {
+  padding: 9px 15px;
+  border-radius: var(--r-pill);
+  font-size: 14.5px;
+  color: var(--ink-soft);
+  text-decoration: none;
+  transition:
+    color 0.5s var(--ease),
+    background-color 0.5s var(--ease);
+}
+
+.nav-links a:hover {
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.nav-links a[aria-current="page"] {
+  color: var(--accent);
+}
+
+/* The hamburger is two bars that rotate into an X rather than swapping icons —
+   the same two elements the whole way through, so the motion is continuous. */
+.burger {
+  display: none;
+  position: relative;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: rgba(255, 255, 255, 0.06);
+  cursor: pointer;
+}
+
+.burger span {
+  position: absolute;
+  left: 12px;
+  width: 18px;
+  height: 1.5px;
+  border-radius: 2px;
+  background: var(--ink);
+  transition: transform 0.6s var(--ease);
+}
+
+.burger span:first-child {
+  transform: translateY(-4px);
+}
+
+.burger span:last-child {
+  transform: translateY(4px);
+}
+
+.burger[aria-expanded="true"] span:first-child {
+  transform: rotate(45deg);
+}
+
+.burger[aria-expanded="true"] span:last-child {
+  transform: rotate(-45deg);
+}
+
+.menu {
+  position: fixed;
+  inset: 0;
+  z-index: 35;
+  display: grid;
+  align-content: center;
+  gap: 6px;
+  padding: 0 var(--gutter);
+  background: rgba(4, 4, 5, 0.86);
+  backdrop-filter: blur(28px);
+  -webkit-backdrop-filter: blur(28px);
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 0.6s var(--ease),
+    visibility 0.6s var(--ease);
+}
+
+.menu[data-open="true"] {
+  opacity: 1;
+  visibility: visible;
+}
+
+.menu a {
+  font-size: clamp(34px, 9vw, 54px);
+  font-weight: 600;
+  letter-spacing: -0.035em;
+  color: var(--ink);
+  text-decoration: none;
+  /* Each link rises out of an invisible box, one after the next. */
+  opacity: 0;
+  transform: translateY(48px);
+  transition:
+    opacity 0.7s var(--ease),
+    transform 0.7s var(--ease);
+}
+
+.menu[data-open="true"] a {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.menu a:nth-child(1) { transition-delay: 0.06s; }
+.menu a:nth-child(2) { transition-delay: 0.12s; }
+.menu a:nth-child(3) { transition-delay: 0.18s; }
+.menu a:nth-child(4) { transition-delay: 0.24s; }
+
+/* ---------------------------------------------------------------------------
+   Buttons — a pill, and any trailing glyph lives in its own circle flush with
+   the right inner padding. The circle is what moves on hover, not the label.
+   --------------------------------------------------------------------------- */
+
+.cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  padding: 9px 9px 9px 26px;
+  border-radius: var(--r-pill);
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 600;
+  font-size: 15px;
+  letter-spacing: -0.01em;
+  text-decoration: none;
+  transition:
+    transform 0.6s var(--ease),
+    box-shadow 0.6s var(--ease),
+    background-color 0.6s var(--ease);
+  box-shadow: 0 18px 40px -22px var(--accent);
+}
+
+.cta:hover {
+  background: var(--accent-soft);
+  box-shadow: 0 22px 46px -20px var(--accent);
+}
+
+.cta:active {
+  transform: scale(0.98);
+}
+
+.cta__icon {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--r-pill);
+  background: rgba(0, 0, 0, 0.16);
+  font-size: 15px;
+  line-height: 1;
+  transition: transform 0.6s var(--ease);
+}
+
+.cta:hover .cta__icon {
+  transform: translate(4px, -1px) scale(1.06);
+}
+
+.cta.ghost {
+  background: transparent;
+  color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--hair-strong);
+}
+
+.cta.ghost:hover {
+  background: rgba(255, 255, 255, 0.05);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.22);
+}
+
+.cta.ghost .cta__icon {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.nav .cta {
+  padding: 8px 8px 8px 20px;
+  font-size: 14px;
+}
+
+.nav .cta__icon {
+  width: 28px;
+  height: 28px;
+  font-size: 13px;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 40px;
+}
+
+/* ---------------------------------------------------------------------------
+   Type.
+   --------------------------------------------------------------------------- */
+
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 13px;
+  border-radius: var(--r-pill);
+  box-shadow: inset 0 0 0 1px var(--hair);
+  background: rgba(255, 255, 255, 0.03);
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.eyebrow::before {
+  content: "";
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 10px var(--accent);
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+  font-weight: 600;
+  letter-spacing: -0.035em;
+  line-height: 1.02;
+}
+
+h1 {
+  font-size: clamp(44px, 6.6vw, 88px);
+}
+
+h2 {
+  font-size: clamp(30px, 3.7vw, 48px);
+  line-height: 1.05;
+  max-width: 16ch;
+}
+
+h3 {
+  font-size: 21px;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+p {
+  margin: 0;
+  color: var(--ink-soft);
+}
+
+a {
+  color: var(--accent);
+}
+
+.lead {
+  font-size: clamp(18px, 1.5vw, 21px);
+  line-height: 1.6;
+  color: var(--ink-soft);
+  max-width: 46ch;
+}
+
+.small {
+  font-size: 14.5px;
+  line-height: 1.6;
+  color: var(--ink-faint);
+}
+
+.mono {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+::selection {
+  background: oklch(0.766 0.176 152 / 0.28);
+}
+
+/* ---------------------------------------------------------------------------
+   Layout — a 12-column bento that collapses to a single column on a phone.
+   --------------------------------------------------------------------------- */
+
+.band {
+  max-width: var(--page);
+  margin: 0 auto;
+  padding: var(--band) var(--gutter);
+}
+
+.band + .band {
+  padding-top: 0;
+}
+
+.band-head {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 20px;
+  margin-bottom: 56px;
+  max-width: 62ch;
+}
+
+.bento {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 18px;
+}
+
+.c4 { grid-column: span 4; }
+.c5 { grid-column: span 5; }
+.c6 { grid-column: span 6; }
+.c7 { grid-column: span 7; }
+.c8 { grid-column: span 8; }
+.c12 { grid-column: span 12; }
+.r2 { grid-row: span 2; }
+
+/* The double bezel: an outer tray with a hairline, an inner plate with its own
+   top highlight, and radii that stay concentric. Every panel on the site is
+   this, at one of three paddings. */
+.shell {
+  padding: 7px;
+  border-radius: var(--r-shell);
+  background: var(--shell);
+  box-shadow: inset 0 0 0 1px var(--hair);
+}
+
+.core {
+  height: 100%;
+  padding: 34px;
+  border-radius: var(--r-core);
+  background: linear-gradient(180deg, var(--core-top), var(--core-bottom));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.09),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.core.tight {
+  padding: 26px;
+}
+
+.core.wide {
+  padding: clamp(30px, 4vw, 56px);
+}
+
+/* A panel that leads with a number or a mark keeps it in a fixed 44px slot so
+   a row of them lines up whatever the label lengths do. */
+.core .index {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  color: var(--accent);
+}
+
+.core p {
+  font-size: 15.5px;
+  line-height: 1.62;
+}
+
+.shell.accent {
+  background: oklch(0.44 0.098 152 / 0.22);
+  box-shadow: inset 0 0 0 1px oklch(0.766 0.176 152 / 0.3);
+}
+
+.shell.accent .core {
+  background: linear-gradient(180deg, oklch(0.3 0.06 152 / 0.55), var(--core-bottom));
+}
+
+/* A card that is a link lifts very slightly and warms its hairline. Nothing
+   scales, nothing shadows harder — the whole gesture is 6 pixels. */
+.shell.link {
+  text-decoration: none;
+  color: inherit;
+  transition:
+    transform 0.7s var(--ease),
+    background-color 0.7s var(--ease);
+}
+
+.shell.link:hover {
+  transform: translateY(-6px);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.rule {
+  height: 1px;
+  border: 0;
+  margin: 22px 0;
+  background: var(--hair);
+}
+
+/* Lists — a marker that is a rule, not a bullet glyph. */
+.ticks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.ticks li {
+  position: relative;
+  padding-left: 26px;
+  font-size: 15.5px;
+  line-height: 1.6;
+  color: var(--ink-soft);
+}
+
+.ticks li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 11px;
+  width: 12px;
+  height: 1px;
+  background: var(--accent);
+}
+
+.ticks.plain li::before {
+  background: var(--hair-strong);
+}
+
+/* ---------------------------------------------------------------------------
+   Hero.
+   --------------------------------------------------------------------------- */
+
+.hero {
+  padding-top: clamp(132px, 15vw, 196px);
+}
+
+.hero-copy {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 26px;
+  align-self: center;
+}
+
+.hero h1 {
+  max-width: 13ch;
+}
+
+/* The explainer's frame. The canvas fills the inner plate, so the sequence's
+   own vignette meets the plate's edge with nothing between them. */
+.stage {
+  position: relative;
+  padding: 0;
+  overflow: hidden;
+  aspect-ratio: 4 / 5;
+  background: #050505;
+}
+
+.stage canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.stage-caption {
+  position: absolute;
+  left: 22px;
+  bottom: 20px;
+  right: 22px;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  pointer-events: none;
+}
+
+/* Shown only when WebGL is missing or scripting is off: the same six beats as
+   words, which is also what a crawler and a screen reader get. */
+.storyboard {
+  display: grid;
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: beat;
+}
+
+.storyboard li {
+  display: grid;
+  grid-template-columns: 40px 1fr;
+  gap: 14px;
+  align-items: baseline;
+  font-size: 15px;
+  color: var(--ink-soft);
+}
+
+.storyboard li::before {
+  counter-increment: beat;
+  content: "0" counter(beat);
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  color: var(--accent);
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.legend i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 10px currentColor;
+}
+
+.legend .k-message { color: #5c6a8f; }
+.legend .k-decision { color: #25d366; }
+.legend .k-action { color: #38bdf8; }
+.legend .k-date { color: #f5b642; }
+
+/* A sample of the real output, set as the product sets it. */
+.brief {
+  display: grid;
+  gap: 8px;
+}
+
+.brief-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 10px;
+  padding: 11px 0;
+  border-top: 1px solid var(--hair);
+  font-size: 15px;
+  color: var(--ink);
+}
+
+.brief-line:first-of-type {
+  border-top: 0;
+}
+
+.tag {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  padding: 3px 9px;
+  border-radius: var(--r-pill);
+  color: var(--accent);
+  box-shadow: inset 0 0 0 1px oklch(0.766 0.176 152 / 0.35);
+}
+
+.tag.quiet {
+  color: var(--ink-faint);
+  box-shadow: inset 0 0 0 1px var(--hair);
+}
+
+/* The beta warning. One amber ground, the same one the app uses for "something
+   here is not fine", so the two products agree about what a warning looks like. */
+.warn {
+  border-radius: var(--r-core);
+  padding: 24px 28px;
+  font-size: 15px;
+  line-height: 1.62;
+  color: oklch(0.88 0.09 82);
+  background: oklch(0.3 0.045 82 / 0.5);
+  box-shadow: inset 0 0 0 1px oklch(0.6 0.09 82 / 0.32);
+}
+
+.warn strong {
+  color: oklch(0.94 0.07 82);
+  font-weight: 600;
+}
+
+.warn a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* A metric, for the strip under the hero. */
+.metric {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.metric strong {
+  font-size: clamp(26px, 3vw, 38px);
+  font-weight: 600;
+  letter-spacing: -0.035em;
+  line-height: 1;
+}
+
+.metric span {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+/* ---------------------------------------------------------------------------
+   Scroll entry. Nothing appears statically: panels arrive heavy, from below,
+   out of focus. The hidden state is applied only once the module has run, so a
+   page with scripting off still shows every word.
+   --------------------------------------------------------------------------- */
+
+.js .reveal {
+  opacity: 0;
+  transform: translate3d(0, 56px, 0);
+  filter: blur(10px);
+  transition:
+    opacity 0.9s var(--ease),
+    transform 0.9s var(--ease),
+    filter 0.9s var(--ease);
+  transition-delay: var(--delay, 0s);
+}
+
+/* Stagger, as classes rather than an inline `style` — the CSP is
+   `style-src 'self'` and a style attribute is inline style. */
+.d1 { --delay: 0.08s; }
+.d2 { --delay: 0.16s; }
+.d3 { --delay: 0.24s; }
+
+.js .reveal.in {
+  opacity: 1;
+  transform: none;
+  filter: blur(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  .js .reveal {
+    opacity: 1;
+    transform: none;
+    filter: none;
+    transition: none;
+  }
+
+  .cta,
+  .cta__icon,
+  .shell.link {
+    transition: none;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Footer.
+   --------------------------------------------------------------------------- */
+
+.site-foot {
+  max-width: var(--page);
+  margin: 0 auto;
+  padding: 0 var(--gutter) 72px;
+}
+
+.foot-top {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 32px;
+  padding-top: 48px;
+  border-top: 1px solid var(--hair);
+}
+
+.foot-mark {
+  font-size: clamp(48px, 9vw, 104px);
+  font-weight: 600;
+  letter-spacing: -0.05em;
+  line-height: 0.9;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.09);
+}
+
+.foot-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 26px;
+}
+
+.foot-nav a {
+  color: var(--ink-soft);
+  text-decoration: none;
+  font-size: 14.5px;
+  transition: color 0.5s var(--ease);
+}
+
+.foot-nav a:hover {
+  color: var(--ink);
+}
+
+.foot-fine {
+  margin-top: 28px;
+  font-size: 13px;
+  color: var(--ink-faint);
+}
+
+/* ---------------------------------------------------------------------------
+   The 9:16 export page. A locked 1080x1920 frame, scaled to whatever screen is
+   in front of it, so a screen recording of it is the deliverable itself.
+   --------------------------------------------------------------------------- */
+
+.export {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  gap: 26px;
+  padding: 96px var(--gutter) 64px;
+}
+
+.frame {
+  width: min(432px, calc(100vw - 2 * var(--gutter)));
+  aspect-ratio: 9 / 16;
+  padding: 7px;
+}
+
+.frame .core {
+  padding: 0;
+  overflow: hidden;
+  background: #050505;
+}
+
+.frame canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.export-meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px 22px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+/* ---------------------------------------------------------------------------
+   Below 900px every asymmetry collapses. Overlapping and rotated panels are a
+   desktop affordance; on a phone they are just overlapping touch targets.
+   --------------------------------------------------------------------------- */
+
+@media (max-width: 900px) {
+  .bento {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
+  .c4, .c5, .c6, .c7, .c8, .c12 {
+    grid-column: span 1;
+  }
+
+  .r2 {
+    grid-row: span 1;
+  }
+
+  .nav-links {
+    display: none;
+  }
+
+  .burger {
+    display: block;
+  }
+
+  .nav {
+    width: calc(100vw - 32px);
+    justify-content: space-between;
+    padding-left: 20px;
+  }
+
+  .brand {
+    margin-right: 0;
+  }
+
+  .stage {
+    aspect-ratio: 3 / 4;
+  }
+
+  .band-head {
+    margin-bottom: 34px;
+  }
+
+  .core {
+    padding: 26px;
+  }
+}

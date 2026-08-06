@@ -9,106 +9,159 @@
       content="WALAO plans and limits. The beta is free, every account starts on a 14-day Pro trial with no card, and no price has been published yet."
     />
     <link rel="icon" href="/favicon.svg" />
-    <link rel="stylesheet" href="/app.css" />
+    <link rel="stylesheet" href="/site.css" />
   </head>
   <body>
-    <header class="site-head">
-      <a class="site-brand" href="/">
-        <img src="/favicon.svg" alt="" width="30" height="30" />WALAO
-      </a>
-      <nav class="site-nav">
-        <a href="/features">Features</a>
-        <a href="/pricing" aria-current="page">Pricing</a>
-        <a href="/security">Privacy</a>
-        <a class="btn" href="/signin">Sign in</a>
+    <header>
+      <nav class="nav">
+        <a class="brand" href="/">
+          <img src="/favicon.svg" alt="" width="26" height="26" />WALAO
+        </a>
+        <div class="nav-links">
+          <a href="/features">Features</a>
+          <a href="/how">How it works</a>
+          <a href="/pricing" aria-current="page">Pricing</a>
+          <a href="/security">Privacy</a>
+        </div>
+        <a class="cta" href="/signin">Sign in<span class="cta__icon" aria-hidden="true">↗</span></a>
+        <button class="burger" type="button" aria-expanded="false" aria-controls="menu" aria-label="Open menu">
+          <span></span><span></span>
+        </button>
       </nav>
+      <div class="menu" id="menu" data-open="false">
+        <a href="/features">Features</a>
+        <a href="/how">How it works</a>
+        <a href="/pricing">Pricing</a>
+        <a href="/security">Privacy</a>
+      </div>
     </header>
 
-    <main class="site">
-      <section class="site-hero">
-        <h1>Plans</h1>
-        <p>
-          WALAO is in private beta and there is nothing to pay yet. The limits below are the ones
-          the product actually enforces; the prices are not set.
-        </p>
-      </section>
-
-      <section class="site-section">
-        <ul class="site-grid">
-          <li class="card">
-            <h3>Free</h3>
-            <strong>Enough to build the habit</strong>
-            <ul class="site-list">
-              <li>3 groups</li>
-              <li>500 messages a day</li>
-              <li>5 group summaries a day</li>
-              <li>Today Brief, Ask WALAO, reminders and memories</li>
-              <li>Retention you choose, 1–30 days</li>
-            </ul>
-          </li>
-          <li class="card">
-            <h3>Pro</h3>
-            <strong>For someone living in their groups</strong>
-            <ul class="site-list">
-              <li>20 groups</li>
-              <li>5,000 messages a day</li>
-              <li>50 group summaries a day</li>
-              <li>Everything on Free, with room to use it</li>
-            </ul>
-            <p class="muted">
-              No published price. RM19–RM39 a month is a working research figure, not an offer.
+    <main>
+      <section class="band hero">
+        <div class="bento">
+          <div class="c7 hero-copy">
+            <span class="eyebrow">Plans</span>
+            <h1>Nothing to pay yet.</h1>
+            <p class="lead">
+              WALAO is in private beta. The limits below are the ones the product actually enforces;
+              the prices are not set.
             </p>
-          </li>
-          <li class="card">
-            <h3>Team</h3>
-            <strong>Not available yet</strong>
-            <ul class="site-list">
-              <li>Shared briefs across a team</li>
-              <li>Administration and audit</li>
-              <li>Longer retention policies</li>
-            </ul>
-            <p class="muted">
-              Waiting on the enterprise security work it would need. There is no sign-up for it.
+            <p class="actions">
+              <a class="cta" href="/signin">Start free<span class="cta__icon" aria-hidden="true">↗</span></a>
             </p>
-          </li>
-        </ul>
+          </div>
+        </div>
       </section>
 
-      <section class="site-section">
-        <h2>The trial</h2>
-        <p>
-          Every account gets 14 days on Pro's limits, starting the moment WhatsApp pairing
-          completes. No card, nothing to cancel. When it lapses the account simply drops to Free's
-          limits — your data, groups and briefs stay where they are.
-        </p>
+      <section class="band">
+        <div class="bento">
+          <div class="c4 shell reveal">
+            <div class="core wide">
+              <p class="index">Free</p>
+              <h3>Enough to build the habit</h3>
+              <hr class="rule" />
+              <ul class="ticks">
+                <li>3 groups</li>
+                <li>500 messages a day</li>
+                <li>5 group summaries a day</li>
+                <li>Today Brief, Ask WALAO, reminders and memories</li>
+                <li>Retention you choose, 1–30 days</li>
+              </ul>
+            </div>
+          </div>
+          <div class="c4 shell accent reveal d1">
+            <div class="core wide">
+              <p class="index">Pro</p>
+              <h3>For someone living in their groups</h3>
+              <hr class="rule" />
+              <ul class="ticks">
+                <li>20 groups</li>
+                <li>5,000 messages a day</li>
+                <li>50 group summaries a day</li>
+                <li>Everything on Free, with room to use it</li>
+              </ul>
+              <hr class="rule" />
+              <p class="small">
+                No published price. RM19–RM39 a month is a working research figure, not an offer.
+              </p>
+            </div>
+          </div>
+          <div class="c4 shell reveal d2">
+            <div class="core wide">
+              <p class="index">Team</p>
+              <h3>Not available yet</h3>
+              <hr class="rule" />
+              <ul class="ticks plain">
+                <li>Shared briefs across a team</li>
+                <li>Administration and audit</li>
+                <li>Longer retention policies</li>
+              </ul>
+              <hr class="rule" />
+              <p class="small">
+                Waiting on the enterprise security work it would need. There is no sign-up for it.
+              </p>
+            </div>
+          </div>
+        </div>
       </section>
 
-      <section class="site-section">
-        <h2>Why there is no price yet</h2>
-        <p>
-          Charging for something that runs on an unofficial WhatsApp gateway would be selling you a
-          promise the platform hasn't made. The beta is free while that risk is real and while we
-          find out what the summaries are actually worth to people using them. When there is a
-          price, it will be on this page before it is on a card statement.
-        </p>
-        <p class="site-actions">
-          <a class="btn" href="/signin">Sign up</a>
-          <a class="btn ghost" href="/security">Read the risks first</a>
-        </p>
+      <section class="band">
+        <div class="bento">
+          <div class="c5 band-head reveal">
+            <span class="eyebrow">The trial</span>
+            <h2>Fourteen days on Pro, no card.</h2>
+          </div>
+          <div class="c7 shell reveal d1">
+            <div class="core wide">
+              <p>
+                Every account gets 14 days on Pro's limits, starting the moment WhatsApp pairing
+                completes. No card, nothing to cancel. When it lapses the account simply drops to
+                Free's limits — your data, groups and briefs stay where they are.
+              </p>
+            </div>
+          </div>
+          <div class="c7 shell reveal d2">
+            <div class="core wide">
+              <span class="eyebrow">Why there is no price yet</span>
+              <p>
+                Charging for something that runs on an unofficial WhatsApp gateway would be selling
+                you a promise the platform hasn't made. The beta is free while that risk is real and
+                while we find out what the summaries are actually worth to people using them. When
+                there is a price, it will be on this page before it is on a card statement.
+              </p>
+            </div>
+          </div>
+          <div class="c5 shell accent reveal d3">
+            <div class="core wide">
+              <span class="eyebrow">Start</span>
+              <h3>Free while the beta runs.</h3>
+              <p class="actions">
+                <a class="cta" href="/signin">Try it free<span class="cta__icon" aria-hidden="true">↗</span></a>
+                <a class="cta ghost" href="/security">Read the risks<span class="cta__icon" aria-hidden="true">→</span></a>
+              </p>
+            </div>
+          </div>
+        </div>
       </section>
     </main>
 
     <footer class="site-foot">
-      <p><strong>WALAO</strong> — WhatsApp AI Life Assistant and Organizer.</p>
-      <nav>
-        <a href="/features">Features</a>
-        <a href="/pricing">Pricing</a>
-        <a href="/security">Privacy &amp; security</a>
-        <a href="/signin">Sign in</a>
-      </nav>
-      <p class="muted">
-        WALAO is not affiliated with or endorsed by WhatsApp or Meta.
+      <div class="foot-top">
+        <p class="foot-mark">WALAO</p>
+        <nav class="foot-nav">
+          <a href="/features">Features</a>
+          <a href="/how">How it works</a>
+          <a href="/pricing">Pricing</a>
+          <a href="/security">Privacy &amp; security</a>
+          <a href="/signin">Sign in</a>
+        </nav>
+      </div>
+      <p class="foot-fine">
+        WALAO — WhatsApp AI Life Assistant and Organizer. Not affiliated with or endorsed by
+        WhatsApp or Meta.
       </p>
     </footer>
+
+    <script type="module" src="/site.js"></script>
   </body>
 </html>
