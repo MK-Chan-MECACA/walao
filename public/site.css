@@ -629,22 +629,6 @@ a {
   height: 100%;
 }
 
-.stage-caption {
-  position: absolute;
-  left: 22px;
-  bottom: 20px;
-  right: 22px;
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  font-family: var(--mono);
-  font-size: 10px;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  color: var(--ink-faint);
-  pointer-events: none;
-}
-
 /* Shown only when WebGL is missing or scripting is off: the same six beats as
    words, which is also what a crawler and a screen reader get. */
 .storyboard {
