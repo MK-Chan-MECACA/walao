@@ -10,7 +10,7 @@
   <body>
     <header id="chrome"></header>
 
-    <!-- ═══════════════════ 1a Briefing view (default) ═══════════════════ -->
+    <!-- ═══════════════════ 1a Calm view (default) ═══════════════════ -->
     <main class="with-rail" id="briefing-view">
       <div class="brief">
         <h1>Today <button class="view-toggle" id="to-console" title="Switch to console view">Console →</button></h1>
@@ -20,28 +20,17 @@
         <p id="gap" class="notice" hidden></p>
         <p id="error" class="error" hidden></p>
 
-        <!-- The Brief is finite: one tick per item, filled as it is cleared. -->
-        <div class="meter" id="meter" hidden>
-          <div class="ticks"></div>
-          <p class="label"></p>
-        </div>
-
         <section class="card" id="empty" hidden>
           <h2>Nothing in today's Brief</h2>
           <p id="empty-line"></p>
         </section>
 
-        <section class="card bucket" id="needs_action" hidden>
-          <h2>Needs action</h2>
-          <ul class="rows"></ul>
-        </section>
-        <section class="card bucket" id="decided" hidden>
-          <h2>Decided</h2>
-          <ul class="rows"></ul>
-        </section>
-        <section class="card bucket" id="worth_noting" hidden>
-          <h2>Worth noting</h2>
-          <ul class="rows"></ul>
+        <!-- The day's pick: a headline and at most five items. Every other item
+             stays one click away in the Console, which is also the only way to
+             correct a pick you disagree with. -->
+        <section class="card" id="pick" hidden>
+          <h2 id="headline"></h2>
+          <ul class="rows" id="pick-items"></ul>
         </section>
 
         <section class="card">
@@ -110,7 +99,7 @@
         <div>
           <p class="counter-label">Credits today</p>
           <p class="counter-value" id="counter-credits">0</p>
-          <div class="counter-bar"><span id="counter-credits-bar" style="width:0%"></span></div>
+          <div class="counter-bar"><span id="counter-credits-bar"></span></div>
         </div>
       </div>
 
@@ -137,25 +126,25 @@
           <div class="coverage-card" id="coverage-card" hidden>
             <div class="coverage-head">
               <h3>Coverage · last 24h</h3>
-              <span id="coverage-gap-label" style="font-size:11px;color:var(--warn-ink)"></span>
+              <span id="coverage-gap-label"></span>
             </div>
             <div class="coverage-bar-stack" id="coverage-bar"></div>
             <div class="coverage-labels" id="coverage-labels"></div>
-            <p id="coverage-note" style="font-size:12px;color:var(--warn-ink);line-height:1.45"></p>
+            <p id="coverage-note"></p>
           </div>
 
           <!-- Groups summary -->
-          <div class="card" style="margin:0">
-            <div style="display:flex;align-items:center;justify-content:space-between">
+          <div class="card flush">
+            <div class="coverage-head">
               <h3>Groups</h3>
-              <span class="muted" id="console-groups-count" style="font-size:11.5px"></span>
+              <span class="muted" id="console-groups-count"></span>
             </div>
             <ul class="rail-groups" id="console-groups-list"></ul>
-            <a href="/groups" style="font-size:12px">Manage Groups →</a>
+            <a href="/groups">Manage Groups →</a>
           </div>
 
           <!-- Latest summaries -->
-          <div class="card" style="margin:0">
+          <div class="card flush">
             <h3>Latest summaries</h3>
             <ul class="rows" id="console-summaries-list">
               <li class="muted">Loading…</li>

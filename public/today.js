@@ -41,7 +41,7 @@ try {
       states.set(`${s.id}|${st.section}|${st.item_index}`, st.state);
     }
   }
-  renderBrief(brief);
+  renderPick(brief);
   renderFilters();
   renderHistory();
   // Pre-fetch console data
@@ -121,7 +121,10 @@ function renderConsole() {
 
   if (cachedUsage) {
     $("counter-summaries-sub").textContent = `${cachedUsage.usage.messages_today?.toLocaleString() ?? 0} messages read`;
-    $("counter-credits").innerHTML = `${cachedUsage.usage.credits_today ?? 0}<span style="font-size:15px;color:var(--muted)"> / ${cachedUsage.limits.max_summaries_per_day ?? 0}</span>`;
+    $("counter-credits").replaceChildren(
+      document.createTextNode(String(cachedUsage.usage.credits_today ?? 0)),
+      el("span", { class: "of", text: ` / ${cachedUsage.limits.max_summaries_per_day ?? 0}` }),
+    );
     const pct = Math.min(100, Math.round(((cachedUsage.usage.credits_today ?? 0) / (cachedUsage.limits.max_summaries_per_day || 1)) * 100));
     $("counter-credits-bar").style.width = `${pct}%`;
   }
@@ -264,10 +267,17 @@ function renderCoverage() {
   const afterPct = 100 - beforePct - gapPct;
 
   $("coverage-gap-label").textContent = `${Math.round(gapDuration / 3600000)}h ${Math.round((gapDuration % 3600000) / 60000)}m gap`;
+  // Widths go through the CSSOM, not a style attribute: `style-src 'self'`
+  // blocks the attribute and would leave the bar as three equal thirds.
+  const seg = (cls, pct) => {
+    const s = el("span", { class: cls });
+    s.style.flex = `${pct} 1 0`;
+    return s;
+  };
   $("coverage-bar").replaceChildren(
-    el("span", { class: "on", style: `flex:${beforePct} 1 0` }),
-    el("span", { class: "gap", style: `flex:${gapPct} 1 0` }),
-    el("span", { class: "on", style: `flex:${afterPct} 1 0` }),
+    seg("on", beforePct),
+    seg("gap", gapPct),
+    seg("on", afterPct),
   );
 
   const fmt = (ts) => new Date(ts).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", hour12: false });
@@ -278,7 +288,10 @@ function renderCoverage() {
     el("span", { text: "NOW" }),
   );
 
-  $("coverage-note").innerHTML = `Disconnected ${fmt(gapStart)}–${fmt(gapEnd)}, so this Brief is partial. <a href="/pair" style="color:currentColor">Re-pair</a>`;
+  $("coverage-note").replaceChildren(
+    document.createTextNode(`Disconnected ${fmt(gapStart)}–${fmt(gapEnd)}, so this Brief is partial. `),
+    el("a", { href: "/pair", text: "Re-pair" }),
+  );
 }
 
 function renderConsoleGroups() {
@@ -334,7 +347,10 @@ function fail(err) {
   $("error").hidden = false;
 }
 
-function renderBrief(brief) {
+// The calm view: the day's headline and at most the picked items. Everything
+// else is one click away in the Console — which is also the only way to correct
+// a pick, so the link says how much it is hiding.
+function renderPick(brief) {
   $("meta").textContent = `${brief.date} · drawn from ${brief.summary_count} Summary(ies) in the last 24 hours.`;
   if (status?.coverage_gap) {
     $("gap").textContent =
@@ -344,30 +360,25 @@ function renderBrief(brief) {
   }
   items = [];
   for (const bucket of ["needs_action", "decided", "worth_noting"]) {
-    const bucketItems = brief[bucket];
-    items.push(...bucketItems);
-    $(bucket).hidden = bucketItems.length === 0;
-    const h2 = $(bucket).querySelector("h2");
-    h2.querySelector(".count")?.remove();
-    h2.append(el("span", { class: "count", text: String(bucketItems.length) }));
-    $(bucket).querySelector("ul").replaceChildren(...bucketItems.map(itemRow));
+    items.push(...brief[bucket]);
   }
-  renderMeter();
-  if (brief.summary_count === 0) emptyState();
-}
 
-// The Brief has an end and this is where you can see it: one tick per item,
-// filled from the left as they are cleared. Ticks are a count, not a map —
-// which particular items are done is what the rows themselves already say.
-function renderMeter() {
-  const meter = $("meter");
-  meter.hidden = items.length === 0;
-  if (meter.hidden) return;
-  const cleared = items.filter((i) => states.get(sourceKey(i.sources[0]))).length;
-  meter.querySelector(".ticks").replaceChildren(
-    ...items.map((_, i) => el("span", { class: i < cleared ? "on" : null })),
-  );
-  meter.querySelector(".label").textContent = `${cleared} / ${items.length} cleared`;
+  if (brief.summary_count === 0) {
+    emptyState();
+    return;
+  }
+
+  const byKey = new Map(items.map((i) => [sourceKey(i.sources[0]), i]));
+  const picked = (brief.pick?.keys ?? []).map((k) => byKey.get(k)).filter(Boolean);
+
+  $("pick").hidden = false;
+  $("headline").textContent = picked.length
+    ? (brief.pick?.headline || "Here's today.")
+    : "Nothing needs you today.";
+  $("pick-items").replaceChildren(...picked.map(pickRow));
+
+  const rest = items.length - picked.length;
+  $("to-console").textContent = rest > 0 ? `${rest} more · Console →` : "Console →";
 }
 
 // §44, §35: the rail. Read-only standing facts — each card ends at the screen
@@ -491,10 +502,10 @@ async function emptyState() {
   say("Nothing was summarized in the last 24 hours — your Groups were quiet.");
 }
 
-function itemRow(item) {
-  const state = states.get(sourceKey(item.sources[0])) ?? null;
-  const li = el("li", { class: state ? `item ${state}` : "item" });
-
+// A picked row does only what does something in the world: open the Group in
+// WhatsApp, and keep the thing as a Reminder. Done and Dismiss live in the
+// Console — on a two-item page they are bookkeeping.
+function pickRow(item) {
   const groups = new Map();
   for (const s of item.sources) groups.set(s.group_id, s);
   const chips = el(
@@ -508,21 +519,11 @@ function itemRow(item) {
     ),
   );
 
-  const mark = (next) =>
-    el("button", {
-      class: "secondary",
-      text: next === "complete" ? "Done" : "Dismiss",
-      "aria-pressed": state === next ? "true" : "false",
-      onclick: () => setState(li, item, state === next ? null : next),
-    });
-
   const actions = el("div", { class: "actions" });
-
   // §23: only an extracted action item can become a Reminder, and only by
   // this explicit confirmation. A merged item confirms from its first
   // Summary — the text is identical across them, so confirming each would
-  // just make duplicate Reminders. It leads the row and it is the only one in
-  // the accent: keeping a thing is the decision, clearing it is the default.
+  // just make duplicate Reminders.
   const action = item.sources.find((s) => s.section === "action_items");
   if (action) {
     actions.append(
@@ -532,38 +533,13 @@ function itemRow(item) {
       }),
     );
   }
-  actions.append(mark("complete"), mark("dismissed"));
 
-  li.append(el("div", { class: "grow" }, el("p", { text: item.text }), chips), actions);
-  // §20: the exact messages this item was drawn from, on demand.
-  li.append(citations(item.sources));
-  return li;
-}
-
-async function setState(li, item, next) {
-  try {
-    await Promise.all(
-      item.sources.map((s) =>
-        api(
-          "PUT",
-          `/v1/summaries/${s.summary_id}/items/${s.section}/${s.item_index}/state`,
-          { state: next },
-        ),
-      ),
-    );
-  } catch (err) {
-    return fail(err);
-  }
-  for (const s of item.sources) {
-    if (next === null) states.delete(sourceKey(s));
-    else states.set(sourceKey(s), next);
-  }
-  li.className = next ? `item ${next}` : "item";
-  renderMeter();
-  for (const b of li.querySelectorAll(".actions button")) {
-    if (b.textContent === "Done") b.setAttribute("aria-pressed", next === "complete");
-    if (b.textContent === "Dismiss") b.setAttribute("aria-pressed", next === "dismissed");
-  }
+  return el("li", {},
+    el("div", { class: "grow" }, el("p", { text: item.text }), chips),
+    actions,
+    // §20: the exact messages this item was drawn from, on demand.
+    citations(item.sources),
+  );
 }
 
 async function confirmReminder(button, source) {
