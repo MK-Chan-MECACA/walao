@@ -15,7 +15,7 @@ Promise.all([api("GET", "/v1/groups"), api("GET", "/v1/summaries")])
     $("scope").replaceChildren(
       el("span", {
         text: on.length
-          ? `Only the ${on.length} Group(s) you enabled are searched: ${on.map((g) => g.name ?? g.external_jid).join(", ")}. `
+          ? `Only the ${on.length} Group(s) you enabled are searched, over the last 90 days: ${on.map((g) => g.name ?? g.external_jid).join(", ")}. `
           : "No Group is enabled, so there is nothing to search. ",
       }),
       el("a", { href: "/groups", text: "Groups" }),

@@ -93,3 +93,53 @@ test("non-user group members' messages are equally bounded by the window", async
   assert.equal(await purgeExpired(h.pool, daysFromNow(8)), 2);
   assert.equal((await h.getMessages(token)).messages.length, 0);
 });
+
+// Ticket 01: summaries were the only unbounded table. 008/010 already promise a
+// confirmed reminder/memory "outlives its ~90-day source summary" — this is it.
+test("summaries older than 90 days are purged; newer ones are untouched", async () => {
+  const userId = await h.seedUser("tok");
+  const sessionId = await h.seedSession(userId, "sess-1");
+  const groupId = await h.seedGroup(sessionId, "group-1@g.us");
+
+  const old = await h.seedSummary(userId, groupId, {}, { at: daysFromNow(-91) });
+  const fresh = await h.seedSummary(userId, groupId, {}, { at: daysFromNow(-89) });
+  await h.pool.query(
+    `INSERT INTO item_states (user_id, summary_id, section, item_index, state)
+     VALUES ($1, $2, 'action_items', 0, 'complete')`,
+    [userId, old],
+  );
+
+  await purgeExpired(h.pool);
+
+  const { rows } = await h.pool.query(`SELECT id FROM summaries`);
+  assert.deepEqual(
+    rows.map((r) => r.id),
+    [fresh],
+  );
+  // item_states CASCADE: there is nothing left to hold a state about.
+  assert.equal((await h.pool.query(`SELECT 1 FROM item_states`)).rowCount, 0);
+});
+
+test("a purged summary leaves confirmed reminders and memories intact", async () => {
+  const userId = await h.seedUser("tok");
+  const sessionId = await h.seedSession(userId, "sess-1");
+  const groupId = await h.seedGroup(sessionId, "group-1@g.us");
+  const summaryId = await h.seedSummary(userId, groupId, {}, { at: daysFromNow(-91) });
+
+  await h.pool.query(
+    `INSERT INTO reminders (user_id, summary_id, item_index, text) VALUES ($1, $2, 0, 'Pay vendor')`,
+    [userId, summaryId],
+  );
+  await h.pool.query(
+    `INSERT INTO memories (user_id, summary_id, item_index, content, confirmed_by)
+     VALUES ($1, $2, 0, 'Vendor is paid monthly', $1)`,
+    [userId, summaryId],
+  );
+
+  await purgeExpired(h.pool);
+
+  const reminders = await h.pool.query(`SELECT text, summary_id FROM reminders`);
+  assert.deepEqual(reminders.rows, [{ text: "Pay vendor", summary_id: null }]);
+  const memories = await h.pool.query(`SELECT content, summary_id FROM memories`);
+  assert.deepEqual(memories.rows, [{ content: "Vendor is paid monthly", summary_id: null }]);
+});

@@ -4,6 +4,14 @@ import type pg from "pg";
 export const MIN_RETENTION_DAYS = 1;
 export const MAX_RETENTION_DAYS = 30;
 
+// Summaries are the read side of the product, not raw chat — but not permanent
+// either. 008 and 010 already promise a confirmed Reminder/Memory "outlives its
+// ~90-day source summary"; this is that promise implemented. Those rows copy
+// their text at confirmation time and reference the summary ON DELETE SET NULL,
+// so a purge never takes a user-confirmed fact with it. item_states CASCADE —
+// there is nothing left to hold a state about.
+export const SUMMARY_RETENTION_DAYS = 90;
+
 export async function getRetentionDays(pool: pg.Pool, userId: string): Promise<number> {
   const { rows } = await pool.query(`SELECT retention_days FROM users WHERE id = $1`, [userId]);
   return rows[0].retention_days;
@@ -30,6 +38,11 @@ export async function setRetentionDays(
 // sweeps below ride this timer rather than owning one, and nothing counts them).
 export async function purgeExpired(pool: pg.Pool, now: Date = new Date()): Promise<number> {
   const res = await pool.query(`DELETE FROM messages WHERE expires_at <= $1`, [now]);
+
+  await pool.query(
+    `DELETE FROM summaries WHERE created_at <= $1::timestamptz - make_interval(days => $2)`,
+    [now, SUMMARY_RETENTION_DAYS],
+  );
 
   // F7: an expired token already fails authenticate(); dropping the hash means
   // the row stops holding a credential at all.
