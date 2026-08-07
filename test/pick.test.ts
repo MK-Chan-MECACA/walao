@@ -155,6 +155,19 @@ describe("picker prompt", () => {
     assert.match(p, /Never invent one/); // only keys you were given
   });
 
+  // Both added in picker-v2 after ticket 04 read four real days by eye: the
+  // day's own deadlines were being dropped, and the headline kept describing
+  // the user instead of speaking to them.
+  it("picks up a deadline the person owns even when nobody restates it", () => {
+    assert.match(pickSystemPrompt("MK"), /runs out of time today or tomorrow/);
+  });
+
+  it("asks for a headline addressed to the person, not about them", () => {
+    const p = pickSystemPrompt("MK");
+    assert.match(p, /addressed to the person as "you"/);
+    assert.match(p, /Never write about them in the third person/);
+  });
+
   it("puts candidates inside a delimiter as untrusted data", () => {
     const user = pickUserPrompt(CANDIDATES);
     assert.match(user, /^<items>/);

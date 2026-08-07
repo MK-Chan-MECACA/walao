@@ -30,7 +30,7 @@ type Bucket = "needs_action" | "decided" | "worth_noting";
 
 // Section → bucket ranking. Action items and open questions demand something
 // from the user; decisions are settled; everything else is reference.
-const BUCKETS: [keyof SummaryPayload, Bucket][] = [
+export const BUCKETS: [keyof SummaryPayload, Bucket][] = [
   ["action_items", "needs_action"],
   ["open_questions", "needs_action"],
   ["decisions", "decided"],

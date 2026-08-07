@@ -3,3 +3,6 @@ node_modules/
 *.log
 .DS_Store
 .pgtmp/
+
+# WhatsApp chat exports used for picker validation — real messages, never committed
+WhatsApp Chat with *.txt
