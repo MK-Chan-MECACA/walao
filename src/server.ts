@@ -5,7 +5,7 @@ import { createApp } from "./app.ts";
 import { WaapiGateway } from "./gateway/waapi.ts";
 import { purgeExpired } from "./retention.ts";
 import { tickScheduler } from "./scheduler.ts";
-import { deliverSummaries } from "./deliver.ts";
+import { deliverDigests, deliverSummaries, tickDigests } from "./deliver.ts";
 import { processSummaryJobs } from "./summarize.ts";
 import { backfillGroupNames, syncContacts } from "./subscriptions.ts";
 import { evictIdleSessions } from "./connections.ts";
@@ -78,7 +78,14 @@ async function main(): Promise<void> {
     processSummaryJobs(pool, summarizer, config).catch((err) =>
       console.error("summarize error", err),
     );
-    deliverSummaries(pool, gateway).catch((err) => console.error("delivery error", err));
+    deliverSummaries(pool).catch((err) => console.error("delivery error", err));
+    // Ticket 06: the digest clock writes the day's record for Accounts that
+    // never open the web app, and this sends whatever record is due — one
+    // message a day, whichever path wrote it.
+    tickDigests(pool, picker, config).catch((err) => console.error("digest tick error", err));
+    deliverDigests(pool, gateway, config.appUrl).catch((err) =>
+      console.error("digest delivery error", err),
+    );
   }, 1000);
   timer.unref();
 

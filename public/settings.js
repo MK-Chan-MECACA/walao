@@ -19,6 +19,7 @@ let paused = status?.block?.reason === "paused";
 
 renderPause();
 loadUsage();
+loadDigest();
 loadRetention();
 loadQuality();
 loadAttestations();
@@ -106,6 +107,40 @@ $("pause").onclick = async () => {
     fail(err);
   }
   $("pause").disabled = false;
+};
+
+// Ticket 6: when the one daily message arrives. The zone list comes from the
+// browser's own tz database — the same one the server validates against — so
+// there is no list to ship or keep current.
+async function loadDigest() {
+  let digest;
+  try {
+    digest = await api("GET", "/v1/digest");
+  } catch (err) {
+    fail(err);
+    return;
+  }
+  const zones = Intl.supportedValuesOf?.("timeZone") ?? [digest.timezone];
+  if (!zones.includes(digest.timezone)) zones.unshift(digest.timezone);
+  $("digest-tz").replaceChildren(
+    ...zones.map((z) => el("option", { value: z, text: z, selected: z === digest.timezone })),
+  );
+  $("digest-time").value = digest.digest_time;
+}
+
+$("save-digest").onclick = async () => {
+  $("save-digest").disabled = true;
+  $("error").hidden = true;
+  try {
+    const res = await api("PUT", "/v1/digest", {
+      digest_time: $("digest-time").value,
+      timezone: $("digest-tz").value,
+    });
+    $("digest-time").value = res.digest_time;
+  } catch (err) {
+    fail(err);
+  }
+  $("save-digest").disabled = false;
 };
 
 // §47: 1 to 30 days, the merchant's decision.

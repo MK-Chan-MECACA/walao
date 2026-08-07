@@ -53,7 +53,7 @@ export async function setSchedule(
   return { group_id: groupId, local_time: localTime, timezone, language: language as Language };
 }
 
-function isValidTimeZone(tz: string): boolean {
+export function isValidTimeZone(tz: string): boolean {
   try {
     new Intl.DateTimeFormat("en-US", { timeZone: tz });
     return true;
@@ -64,7 +64,7 @@ function isValidTimeZone(tz: string): boolean {
 
 // Local wall clock ('YYYY-MM-DD', 'HH:MM') of a UTC instant in an IANA zone.
 // Intl carries the full tz database — correct across DST — so no dependency.
-function localParts(instant: Date, timeZone: string): { date: string; time: string } {
+export function localParts(instant: Date, timeZone: string): { date: string; time: string } {
   const parts = Object.fromEntries(
     new Intl.DateTimeFormat("en-CA", {
       timeZone,

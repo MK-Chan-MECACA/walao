@@ -20,7 +20,7 @@ import {
   type SummarizerPort,
   type SummarizerResult,
 } from "../src/summarize.ts";
-import { deliverSummaries } from "../src/deliver.ts";
+import { deliverDigests, deliverSummaries, tickDigests } from "../src/deliver.ts";
 import type { AnswererInput, AnswererPort, AnswererResult } from "../src/ask.ts";
 import type { PickerInput, PickerPort, PickerResult } from "../src/pick.ts";
 
@@ -56,6 +56,7 @@ export function testConfig(): Config {
     // Unused: the harness injects its own sendCode, so no mail is ever sent.
     resendApiKey: "",
     mailFrom: "WALAO <test@example.com>",
+    appUrl: "https://walao.test",
   };
 }
 
@@ -265,6 +266,10 @@ export type Harness = {
   picker: FakePicker;
   summarize: () => Promise<number>;
   deliver: () => Promise<number>;
+  // Ticket 06: the digest clock and the digest send, driven separately so a
+  // test can hold one still while it exercises the other.
+  digestTick: (now?: Date) => Promise<number>;
+  digestSend: () => Promise<number>;
   reset: () => Promise<void>;
   close: () => Promise<void>;
 };
@@ -409,7 +414,9 @@ export async function makeHarness(): Promise<Harness> {
     answerer,
     picker,
     summarize: () => processSummaryJobs(pool, summarizer, config),
-    deliver: () => deliverSummaries(pool, gateway),
+    deliver: () => deliverSummaries(pool),
+    digestTick: (now) => tickDigests(pool, picker, config, now),
+    digestSend: () => deliverDigests(pool, gateway, config.appUrl),
     async reset() {
       codes.length = 0;
       gateway.sends = [];

@@ -13,6 +13,7 @@ export type Config = {
   waapiBaseUrl: string;
   waapiApiKey: string; // empty until a gateway is provisioned; adapter fails loud on use
   webhookUrl: string; // where the WAAPI gateway sends webhooks back to
+  appUrl: string; // public origin of the app, linked from the daily message
   anthropicApiKey: string; // empty => LocalSummarizer echo stand-in, no AI calls
   summarizerModel: string;
   resendApiKey: string; // empty => login codes go to the log, not to a mailbox
@@ -42,6 +43,9 @@ export function loadConfig(): Config {
     waapiBaseUrl: (process.env.WAAPI_BASE_URL ?? "http://localhost:8080").replace(/\/+$/, ""),
     waapiApiKey: process.env.WAAPI_API_KEY ?? "",
     webhookUrl: (process.env.WALAO_WEBHOOK_URL ?? "http://localhost:3000/webhooks/gateway").replace(/\/+$/, ""),
+    // The link in the daily message. Defaults to production because a message
+    // pointing at localhost is worse than no link at all.
+    appUrl: (process.env.WALAO_APP_URL ?? "https://walao.app").replace(/\/+$/, ""),
     // Also not required(): without a key the server boots on the local echo
     // summarizer, so the pipeline stays runnable with no AI spend.
     anthropicApiKey: process.env.ANTHROPIC_API_KEY ?? "",

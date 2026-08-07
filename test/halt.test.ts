@@ -103,7 +103,7 @@ test("halt stops all gateway activity: webhooks refused, sends and pairing block
   assert.equal((conns.body as { halted: boolean }).halted, true);
 });
 
-test("summary window overlapping a halt is delivered incomplete-flagged after resume", async () => {
+test("summary window overlapping a halt drains after resume, and the gap is recorded", async () => {
   const userId = await h.seedUser("op2");
   const sessionId = await h.seedSession(userId, "sess-op2");
   const groupId = await h.seedGroup(sessionId, "group-2@g.us");
@@ -116,7 +116,17 @@ test("summary window overlapping a halt is delivered incomplete-flagged after re
   // seed instant, racing the gap's ended_at by sub-millisecond margins.)
   await seedPendingSummary(userId, groupId, new Date(Date.now() + 1800_000));
   assert.equal(await h.deliver(), 1);
-  assert.match(h.gateway.sends[0].text, /Incomplete/);
+  // Ticket 6: the drain no longer sends per Summary, so the lost window shows
+  // up as the coverage gap it is rather than as a warning line in a message.
+  assert.equal(h.gateway.sends.length, 0);
+  const { rows } = await h.pool.query(
+    `SELECT reason FROM coverage_gaps WHERE session_id = $1`,
+    [sessionId],
+  );
+  assert.deepEqual(
+    rows.map((r) => r.reason),
+    ["halted"],
+  );
 });
 
 test("resume restores normal operation without duplicate delivery", async () => {
@@ -134,10 +144,9 @@ test("resume restores normal operation without duplicate delivery", async () => 
   assert.equal(await h.postWebhook(buildEvent({ session: "sess-op3", chatId: "group-3@g.us" })), 202);
   assert.equal(await countIngestEvents(h.pool), 1);
 
-  // The waiting summary goes out exactly once, unflagged.
+  // The waiting summary is processed exactly once, and sends nothing itself.
   assert.equal(await h.deliver(), 1);
-  assert.equal(h.gateway.sends.length, 1);
-  assert.doesNotMatch(h.gateway.sends[0].text, /Incomplete/);
+  assert.equal(h.gateway.sends.length, 0);
   assert.equal(await h.deliver(), 0);
 
   const conns = await h.api("op3", "GET", "/v1/connections");

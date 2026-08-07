@@ -19,6 +19,7 @@ import {
   listConnections,
 } from "./connections.ts";
 import { getRetentionDays, setRetentionDays } from "./retention.ts";
+import { getDigest, setDigest } from "./deliver.ts";
 import { setSchedule } from "./scheduler.ts";
 import { buildTodayBrief } from "./brief.ts";
 import { pickForToday, type PickerPort } from "./pick.ts";
@@ -722,6 +723,27 @@ export function createApp(deps: {
           return;
         }
         send(res, 200, { retention_days: result });
+        return;
+      }
+
+      // Ticket 06: when the one daily message arrives, and in which zone.
+      if (req.method === "GET" && url.pathname === "/v1/digest") {
+        send(res, 200, await getDigest(pool, userId));
+        return;
+      }
+
+      if (req.method === "PUT" && url.pathname === "/v1/digest") {
+        const body = await readJsonBody(req);
+        if (body === undefined) {
+          send(res, 400, { error: "bad_json" });
+          return;
+        }
+        const result = await setDigest(pool, userId, body);
+        if (result === "invalid") {
+          send(res, 400, { error: "invalid_digest" });
+          return;
+        }
+        send(res, 200, result);
         return;
       }
 
