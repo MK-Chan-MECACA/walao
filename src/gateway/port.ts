@@ -26,6 +26,15 @@ export type NormalizedStatus = {
 
 export type GatewayEvent = NormalizedEvent | NormalizedStatus;
 
+// The Account holder's own WhatsApp identity (migration 030). `phone` and `lid`
+// are the two ways WhatsApp addresses one human, as bare digits — the form a
+// mention is written in inside a message body.
+export type SelfIdentity = {
+  phone: string | null;
+  lid: string | null;
+  name: string | null;
+};
+
 export interface GatewayPort {
   // Convert a raw provider webhook payload (already JSON-parsed) into WALAO's
   // internal event. Throw if the payload is not a recognizable event.
@@ -45,10 +54,19 @@ export interface GatewayPort {
   sendToRecipient(externalSessionId: string, recipientJid: string, text: string): Promise<void>;
 
   // SHA-256 of the paired WhatsApp number, or null if the session is not paired
-  // yet. Hashed inside the adapter (spec §233) so the raw number never reaches
-  // WALAO's storage — the Trial only needs to tell two numbers apart, never to
-  // read one. Metadata only.
+  // yet. Hashed inside the adapter (spec §233) because the Trial only needs to
+  // tell two numbers apart, never to read one, and a hash is the smallest thing
+  // that does that. This is NOT a claim that the number never reaches storage —
+  // sessionIdentity below deliberately stores the raw forms, for a use a hash
+  // cannot serve. Metadata only.
   sessionNumberSha256(externalSessionId: string): Promise<string | null>;
+
+  // The paired human's own identity: both of WhatsApp's addressing forms as
+  // bare digits, plus the display name they post under. Raw, unlike the hash
+  // above, because mention matching is a substring test against message bodies
+  // and equality on a hash cannot perform it. Any field the gateway cannot name
+  // comes back null. Metadata only — never message content.
+  sessionIdentity(externalSessionId: string): Promise<SelfIdentity>;
 
   // Group titles and sizes for a session. Providers may not carry the chat name
   // on message events (WAAPI does not), so discovery registers groups unnamed

@@ -294,6 +294,7 @@ flowchart LR
 - **透明告知**：说明读取内容、AI provider、保存期限、交付渠道和退出方式。
 - **群组治理**：在启用前确认群组管理员许可，并采用适用于当地法律和场景的参与者告知/同意机制。
 - **资料最小化**：MVP 只处理文字和必要 metadata。
+- **账号持有人身份**：连接成功时保存用户本人的两种 WhatsApp 地址形式与显示名称，仅用于判断消息是否 @ 提及本人；随 Session 一同删除。
 - **传输与静态加密**：TLS、资料库/磁碟加密，以及敏感字段的应用层加密。
 - **租户隔离**：每条资料带 tenant scope；后台任务也使用相同授权检查。
 - **保存期限**：原始消息建议默认 7 天，由用户在允许范围内调整；摘要与已确认记忆采用独立期限。
@@ -664,6 +665,7 @@ Every write endpoint requires authentication, authorization, validation, idempot
 - Clear disclosure of data purpose, AI provider, retention, delivery, and withdrawal
 - Group-admin approval plus a participant notice/consent process appropriate to the jurisdiction and use case
 - Text-only data minimization for the MVP
+- The Account holder's own two WhatsApp addressing forms and display name, stored on the Session when it connects and used only to tell whether a message @mentions them; deleted with the Session
 - TLS in transit, encrypted disks/databases, and application-level encryption for sensitive fields
 - Tenant-scoped authorization in APIs and background jobs
 - Automatic expiry for raw messages; separate policies for summaries and confirmed memories

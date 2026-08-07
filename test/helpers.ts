@@ -6,7 +6,12 @@ import { createApp } from "../src/app.ts";
 import { signHmac, hashToken, encrypt } from "../src/crypto.ts";
 import { accountKey } from "../src/accounts.ts";
 import type { Config } from "../src/config.ts";
-import type { GatewayEvent, GatewayPort, SessionStatus } from "../src/gateway/port.ts";
+import type {
+  GatewayEvent,
+  GatewayPort,
+  SelfIdentity,
+  SessionStatus,
+} from "../src/gateway/port.ts";
 import {
   emptySummary,
   processSummaryJobs,
@@ -114,6 +119,19 @@ export class FakeGateway implements GatewayPort {
 
   async sessionNumberSha256(sessionExternalId: string): Promise<string | null> {
     return hashToken(this.numbers[sessionExternalId] ?? `number-for-${sessionExternalId}`);
+  }
+
+  // The paired human's own identity per session id. A session nobody set is one
+  // the gateway cannot name — all three null, which is a case tests must be able
+  // to reach as easily as the happy one.
+  identities: Record<string, Partial<SelfIdentity>> = {};
+  // Set to make sessionIdentity throw, standing in for an unreachable gateway.
+  identityFails = false;
+
+  async sessionIdentity(sessionExternalId: string): Promise<SelfIdentity> {
+    if (this.identityFails) throw new Error("gateway unreachable");
+    const me = this.identities[sessionExternalId] ?? {};
+    return { phone: me.phone ?? null, lid: me.lid ?? null, name: me.name ?? null };
   }
 
   // Group titles the fake gateway will report, keyed by session id. Tests that

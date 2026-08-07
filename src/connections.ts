@@ -1,5 +1,10 @@
 import type pg from "pg";
-import type { GatewayPort, NormalizedStatus, SessionStatus } from "./gateway/port.ts";
+import type {
+  GatewayPort,
+  NormalizedStatus,
+  SelfIdentity,
+  SessionStatus,
+} from "./gateway/port.ts";
 import { isHalted } from "./halt.ts";
 import { ATTESTATION_TEXTS, recordAttestation } from "./attestations.ts";
 import { grantTrial } from "./billing.ts";
@@ -90,6 +95,9 @@ export async function applyGatewayStatus(
   );
   if (evt.status === "connected") {
     await startTrial(pool, gateway, evt.sessionExternalId);
+    // Best-effort like the seeding below: a gateway that cannot name the Session
+    // must not cost the Account its connect. The next 'connected' retries.
+    await captureSelfIdentity(pool, gateway, evt.sessionExternalId).catch(() => {});
     // Best-effort: a gateway hiccup here must not undo the status flip. The next
     // 'connected' (or the group's first message) fills the list instead.
     await seedGroups(pool, gateway, evt.sessionExternalId).catch(() => {});
@@ -128,6 +136,43 @@ async function startTrial(
   // or story §97 stops holding. No number, no grant; the next 'connected' retries.
   const numberSha256 = await gateway.sessionNumberSha256(sessionExternalId).catch(() => null);
   if (numberSha256) await grantTrial(pool, userId, numberSha256);
+}
+
+// Ticket 02 (migration 030). Who the Account holder is on WhatsApp, so later
+// work can answer "was this addressed to me?" rather than guess. Read on every
+// 'connected' so an identity the gateway could not name earlier fills in later.
+//
+// COALESCE, not a plain assignment: a gateway that answers /me with blanks on a
+// reconnect must not erase an identity that was known a minute ago.
+async function captureSelfIdentity(
+  pool: pg.Pool,
+  gateway: GatewayPort,
+  sessionExternalId: string,
+): Promise<void> {
+  const me = await gateway.sessionIdentity(sessionExternalId);
+  await pool.query(
+    `UPDATE whatsapp_sessions
+        SET self_phone = COALESCE($2, self_phone),
+            self_lid   = COALESCE($3, self_lid),
+            self_name  = COALESCE($4, self_name)
+      WHERE external_session_id = $1`,
+    [sessionExternalId, me.phone, me.lid, me.name],
+  );
+}
+
+// The Account's identity, newest identified Session first. ADR-0001 gives an
+// Account one live Session, but re-pairing leaves the retired rows behind, and
+// a row that was never identified would otherwise shadow one that was.
+export async function selfIdentity(pool: pg.Pool, userId: string): Promise<SelfIdentity | null> {
+  const { rows } = await pool.query(
+    `SELECT self_phone AS phone, self_lid AS lid, self_name AS name
+       FROM whatsapp_sessions
+      WHERE user_id = $1 AND (self_phone IS NOT NULL OR self_lid IS NOT NULL)
+      ORDER BY created_at DESC
+      LIMIT 1`,
+    [userId],
+  );
+  return (rows[0] as SelfIdentity | undefined) ?? null;
 }
 
 // Ticket 20 (spec §13-14, §242-245, ADR-0001). One gateway process holds every

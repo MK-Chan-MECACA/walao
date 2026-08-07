@@ -1,4 +1,10 @@
-import type { GatewayEvent, GatewayPort, NormalizedEvent, SessionStatus } from "./port.ts";
+import type {
+  GatewayEvent,
+  GatewayPort,
+  NormalizedEvent,
+  SelfIdentity,
+  SessionStatus,
+} from "./port.ts";
 import { hashToken } from "../crypto.ts";
 
 // WAAPI Gateway adapter (github.com/mecaca-global-inc/waapi-gateway).
@@ -178,11 +184,28 @@ export class WaapiGateway implements GatewayPort {
   }
 
   // /me is the same call sendToSelf makes; its jid is the paired number. The
-  // hash is taken here so nothing above the port ever holds the number itself.
+  // hash is taken here because the Trial only ever compares two numbers.
   async sessionNumberSha256(externalSessionId: string): Promise<string | null> {
     const me = asRecord(await this.call("GET", `/api/${externalSessionId}/me`));
     const number = toChatId(str(me.jid, "jid"));
     return number ? hashToken(number) : null;
+  }
+
+  // Same /me call, read for what it says rather than hashed: mention matching
+  // needs the digits themselves. Every field is optional here — an unpaired or
+  // half-known session yields nulls and callers carry on without an identity.
+  // ponytail: the LID field name is read defensively because the gateway may
+  // not carry one on /me; if pings from LID-addressed senders never arrive,
+  // that is the field to confirm against a live gateway.
+  async sessionIdentity(externalSessionId: string): Promise<SelfIdentity> {
+    const me = asRecord(await this.call("GET", `/api/${externalSessionId}/me`));
+    const id = (v: unknown): string | null =>
+      typeof v === "string" && toChatId(v).length > 0 ? toChatId(v) : null;
+    return {
+      phone: id(me.jid),
+      lid: id(me.lid) ?? id(me.lid_jid),
+      name: typeof me.name === "string" && me.name.trim().length > 0 ? me.name.trim() : null,
+    };
   }
 
   async listGroups(
