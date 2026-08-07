@@ -3,3 +3,4 @@
 User-agent: *
 Disallow: /admin/
 Disallow: /v1/
+Sitemap: https://walao.app/sitemap.xml

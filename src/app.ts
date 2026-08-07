@@ -846,8 +846,11 @@ const MIME: Record<string, string> = {
   ".css": "text/css; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
   ".svg": "image/svg+xml",
+  ".jpg": "image/jpeg",
   ".png": "image/png",
+  ".ico": "image/x-icon",
   ".txt": "text/plain; charset=utf-8",
+  ".xml": "application/xml; charset=utf-8",
 };
 
 // F1. Strict because it can be: after the inline page scripts moved into
@@ -908,6 +911,9 @@ async function serveStatic(res: ServerResponse, pathname: string): Promise<boole
     return false; // missing, or a directory — both are 404
   }
   securityHeaders(res);
+  if (path.extname(file) === ".html" && !["index.html", "features.html", "how.html", "pricing.html", "security.html"].includes(path.basename(file))) {
+    res.setHeader("x-robots-tag", "noindex");
+  }
   res.writeHead(200, { "content-type": MIME[path.extname(file)] ?? "application/octet-stream" });
   res.end(body);
   return true;

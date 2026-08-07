@@ -199,6 +199,10 @@ test("the app's own assets are served with the content types a browser needs", a
     ["/api.js", /^text\/javascript/],
     ["/layout.js", /^text\/javascript/],
     ["/site.js", /^text\/javascript/],
+    ["/og-image.jpg", /^image\/jpeg/],
+    ["/apple-touch-icon.png", /^image\/png/],
+    ["/favicon.ico", /^image\/x-icon/],
+    ["/sitemap.xml", /^application\/xml/],
     // The explainer imports the vendored three.js by absolute path; a wrong
     // MIME here is a module the browser refuses to execute, and the marketing
     // hero silently falls back to nothing.
@@ -210,6 +214,33 @@ test("the app's own assets are served with the content types a browser needs", a
     assert.equal(res.status, 200, path);
     assert.match(res.headers["content-type"] as string, type, path);
   }
+});
+
+test("only marketing pages are indexable, canonical and shareable", async () => {
+  for (const [path, canonical] of [
+    ["/", "https://walao.app/"],
+    ["/features", "https://walao.app/features"],
+    ["/how", "https://walao.app/how"],
+    ["/pricing", "https://walao.app/pricing"],
+    ["/security", "https://walao.app/security"],
+  ] as const) {
+    const res = await raw("GET", path);
+    assert.equal(res.status, 200, path);
+    assert.equal(res.headers["x-robots-tag"], undefined, path);
+    assert.match(res.text, new RegExp(`<link rel="canonical" href="${canonical}"`), path);
+    assert.match(res.text, new RegExp(`<meta property="og:url" content="${canonical}"`), path);
+    assert.match(res.text, /<meta property="og:image" content="https:\/\/walao\.app\/og-image\.jpg"/, path);
+    assert.match(res.text, /<meta name="twitter:card" content="summary_large_image"/, path);
+    assert.equal(res.text.match(/<h1(?:\s|>)/g)?.length, 1, `${path}: one h1`);
+  }
+
+  for (const path of ["/signin", "/pair", "/today", "/groups", "/lists", "/ask", "/settings", "/ops"]) {
+    assert.equal((await raw("GET", path)).headers["x-robots-tag"], "noindex", path);
+  }
+
+  const sitemap = await raw("GET", "/sitemap.xml");
+  assert.match(sitemap.text, /<loc>https:\/\/walao\.app\/<\/loc>/);
+  assert.doesNotMatch(sitemap.text, /signin|today|ops/);
 });
 
 // F1 (audit): the headers that decide what a single injected string is allowed
@@ -254,7 +285,12 @@ test("no page carries an inline script for the CSP to have to allow", async () =
     for (const tag of res.text.match(/<script[^>]*>/g) ?? []) {
       assert.match(tag, /\ssrc="\/[^"]+"/, `${path}: ${tag}`);
     }
-    assert.doesNotMatch(res.text, /https?:\/\/(?!127\.0\.0\.1|localhost)/, `${path} loads no CDN`);
+    // Only tags that fetch count: canonical/og carry absolute walao.app URLs as
+    // metadata, and a crawler reading them pulls nothing into the page.
+    for (const tag of res.text.match(/<(?:script|link|img|iframe|source)[^>]*>/g) ?? []) {
+      if (/rel="canonical"/.test(tag)) continue;
+      assert.doesNotMatch(tag, /https?:\/\/(?!127\.0\.0\.1|localhost)/, `${path} loads no CDN`);
+    }
   }
 
   // F2: the QR library is ours now, and it is the real one.
