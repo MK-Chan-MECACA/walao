@@ -217,6 +217,9 @@ test("the app's own assets are served with the content types a browser needs", a
 });
 
 test("only marketing pages are indexable, canonical and shareable", async () => {
+  const home = await raw("GET", "/");
+  assert.match(home.text, /<title>WALAO — WhatsApp AI Life Assistant and Organizer<\/title>/);
+
   for (const [path, canonical] of [
     ["/", "https://walao.app/"],
     ["/features", "https://walao.app/features"],
