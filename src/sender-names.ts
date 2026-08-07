@@ -1,4 +1,5 @@
 import type pg from "pg";
+import type { SelfIdentity } from "./gateway/port.ts";
 
 type Db = pg.Pool | pg.PoolClient;
 
@@ -61,6 +62,27 @@ export async function loadSenderNames(db: Db, userId: string): Promise<SenderNam
         return name ? `@${name}` : whole;
       }),
   };
+}
+
+// Was the Account holder @mentioned in this text? WhatsApp writes a mention as
+// the bare digits of one of the person's two ids ("@30558843351102") — the same
+// pattern resolveMentions rewrites for display, which is why this lives here.
+//
+// Three things carry the correctness: both id forms are tried (a sender's client
+// writes whichever one it holds), person() collapses a device suffix, and the
+// trailing (?!\d) stops "@601234567891234" matching a self id of 60123456789.
+// The @Name form is tried too: past raw-message expiry the only text left is the
+// Summary item, where the digits have already been rewritten to the display name.
+// Unknown identity is false, never true — a guessed ping is worse than a missed
+// one, and the daily digest carries the item either way.
+export function mentionsSelf(text: string, self: SelfIdentity | null): boolean {
+  if (!self) return false;
+  const digits = [self.phone, self.lid]
+    .map((id) => (id ? person(id) : ""))
+    .filter((d) => d.length > 0);
+  if (digits.some((d) => new RegExp(`@${d}(?!\\d)`).test(text))) return true;
+  if (!self.name) return false;
+  return new RegExp(`@${self.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(text);
 }
 
 // The person behind a JID, which is not the JID: a message arrives from one

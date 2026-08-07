@@ -22,6 +22,7 @@ import {
 } from "../src/summarize.ts";
 import { deliverSummaries } from "../src/deliver.ts";
 import type { AnswererInput, AnswererPort, AnswererResult } from "../src/ask.ts";
+import type { PickerInput, PickerPort, PickerResult } from "../src/pick.ts";
 
 export const WEBHOOK_SECRET = "test-secret";
 export const OPERATOR_SECRET = "test-operator-secret";
@@ -188,6 +189,19 @@ export class FakeAnswerer implements AnswererPort {
   }
 }
 
+// Fake PickerPort — same seam as the other two: canned JSON out, every input
+// recorded so a test can assert exactly what the model was fed, tagged flags
+// included.
+export class FakePicker implements PickerPort {
+  canned: unknown = { headline: "", keys: [] };
+  calls: PickerInput[] = [];
+
+  async pick(input: PickerInput): Promise<PickerResult> {
+    this.calls.push(input);
+    return { output: this.canned, model: "fake-model-1", promptVersion: "test-v1" };
+  }
+}
+
 export type SyntheticEvent = {
   kind: "message";
   session: string;
@@ -248,6 +262,7 @@ export type Harness = {
   gateway: FakeGateway;
   summarizer: FakeSummarizer;
   answerer: FakeAnswerer;
+  picker: FakePicker;
   summarize: () => Promise<number>;
   deliver: () => Promise<number>;
   reset: () => Promise<void>;
@@ -260,11 +275,13 @@ export async function makeHarness(): Promise<Harness> {
   await migrate(pool);
   const gateway = new FakeGateway();
   const answerer = new FakeAnswerer();
+  const picker = new FakePicker();
   const codes: { email: string; code: string }[] = [];
   const app = createApp({
     pool,
     gateway,
     answerer,
+    picker,
     config,
     sendCode: async (email, code) => {
       codes.push({ email, code });
@@ -390,6 +407,7 @@ export async function makeHarness(): Promise<Harness> {
     gateway,
     summarizer,
     answerer,
+    picker,
     summarize: () => processSummaryJobs(pool, summarizer, config),
     deliver: () => deliverSummaries(pool, gateway),
     async reset() {
@@ -402,11 +420,13 @@ export async function makeHarness(): Promise<Harness> {
       summarizer.fail = false;
       answerer.canned = {};
       answerer.calls = [];
+      picker.canned = { headline: "", keys: [] };
+      picker.calls = [];
       await pool.query(
         // operator_sessions and rate_limits are per-test state too: a limiter
         // that remembered the previous test would start refusing signups
         // partway through the suite, from the one IP every test shares.
-        `TRUNCATE messages, summaries, summary_jobs, summary_schedules, attestations, coverage_gaps, groups, whatsapp_sessions, users, ingest_events, privacy_audit, quality_reviews, trials, operator_sessions, rate_limits RESTART IDENTITY CASCADE`,
+        `TRUNCATE messages, summaries, summary_jobs, summary_schedules, briefs, attestations, coverage_gaps, groups, whatsapp_sessions, users, ingest_events, privacy_audit, quality_reviews, trials, operator_sessions, rate_limits RESTART IDENTITY CASCADE`,
       );
       // system_halt is a singleton row, not per-test data — un-halt, don't truncate.
       await pool.query(`UPDATE system_halt SET halted = false`);

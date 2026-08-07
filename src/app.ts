@@ -21,6 +21,7 @@ import {
 import { getRetentionDays, setRetentionDays } from "./retention.ts";
 import { setSchedule } from "./scheduler.ts";
 import { buildTodayBrief } from "./brief.ts";
+import { pickForToday, type PickerPort } from "./pick.ts";
 import {
   confirmActionItem,
   listReminders,
@@ -76,10 +77,11 @@ export function createApp(deps: {
   pool: pg.Pool;
   gateway: GatewayPort;
   answerer: AnswererPort;
+  picker: PickerPort;
   config: Config;
   sendCode?: SendCode;
 }): App {
-  const { pool, gateway, answerer, config } = deps;
+  const { pool, gateway, answerer, picker, config } = deps;
   // Real mail when a Resend key is present, log line when it isn't, so the auth
   // flow stays runnable locally with no mail spend. Tests inject their own.
   const sendCode: SendCode =
@@ -375,7 +377,9 @@ export function createApp(deps: {
       }
 
       if (req.method === "GET" && url.pathname === "/v1/briefs/today") {
-        send(res, 200, await buildTodayBrief(pool, userId));
+        const brief = await buildTodayBrief(pool, userId);
+        const pick = await pickForToday(pool, picker, config, userId, brief);
+        send(res, 200, { ...brief, pick });
         return;
       }
 

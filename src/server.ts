@@ -14,6 +14,9 @@ import { AnthropicSummarizer } from "./summarizer/anthropic.ts";
 import { LocalAnswerer } from "./answerer/local.ts";
 import { AnthropicAnswerer, DEFAULT_ANSWERER_MODEL } from "./answerer/anthropic.ts";
 import type { AnswererPort } from "./ask.ts";
+import { LocalPicker } from "./picker/local.ts";
+import { AnthropicPicker, DEFAULT_PICKER_MODEL } from "./picker/anthropic.ts";
+import type { PickerPort } from "./pick.ts";
 
 // Real entrypoint. Boots the schema, serves the webhook + API, and drains the
 // queue on a simple interval. A single-process poll loop is enough for the
@@ -45,12 +48,22 @@ async function main(): Promise<void> {
       ? `answerer: ${DEFAULT_ANSWERER_MODEL}`
       : "answerer: local echo (no ANTHROPIC_API_KEY — answers quote retrieval verbatim)",
   );
+  // Same conditional again, same reason: the pick stays runnable locally with
+  // no AI spend, on an identical port.
+  const picker: PickerPort = config.anthropicApiKey
+    ? new AnthropicPicker(config.anthropicApiKey)
+    : new LocalPicker();
+  console.log(
+    config.anthropicApiKey
+      ? `picker: ${DEFAULT_PICKER_MODEL}`
+      : "picker: local rule (no ANTHROPIC_API_KEY — tagged action items first, no judgement)",
+  );
   console.log(
     config.resendApiKey
       ? `mail: resend, from ${config.mailFrom}`
       : "mail: log only (no RESEND_API_KEY — login codes print here, no email is sent)",
   );
-  const app = createApp({ pool, gateway, answerer, config });
+  const app = createApp({ pool, gateway, answerer, picker, config });
 
   const timer = setInterval(() => {
     app.drain().catch((err) => console.error("drain error", err));
