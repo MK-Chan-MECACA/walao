@@ -181,7 +181,7 @@ function consoleItemRow(item, index) {
     "div",
     { class: "chips" },
     ...[...groups.values()].map((s) =>
-      el("a", { class: "chip", href: s.jump_url, text: s.group_name ?? s.group_id }),
+      el("span", { class: "chip", text: s.group_name ?? s.group_id }),
     ),
   );
 
@@ -502,20 +502,18 @@ async function emptyState() {
   say("Nothing was summarized in the last 24 hours — your Groups were quiet.");
 }
 
-// A picked row does only what does something in the world: open the Group in
-// WhatsApp, and keep the thing as a Reminder. Done and Dismiss live in the
-// Console — on a two-item page they are bookkeeping.
+// A picked row does only what does something in the world: name its Group and
+// keep the thing as a Reminder. Done and Dismiss live in the Console — on a
+// two-item page they are bookkeeping.
 function pickRow(item) {
   const groups = new Map();
   for (const s of item.sources) groups.set(s.group_id, s);
   const chips = el(
     "div",
     { class: "chips" },
+    // §21: the inline sources below are the reliable path back to the Group.
     ...[...groups.values()].map((s) =>
-      // §21: best-effort deep link. The inline sources below are the
-      // reliable path; this is the one-tap bonus where the client honours
-      // the whatsapp:// scheme.
-      el("a", { class: "chip", href: s.jump_url, text: s.group_name ?? s.group_id }),
+      el("span", { class: "chip", text: s.group_name ?? s.group_id }),
     ),
   );
 
@@ -598,7 +596,6 @@ function historyRow(s) {
       el("strong", { text: s.group_name ?? s.chat_jid }),
       el("span", { class: "muted", text: ` ${fmtDate(s.window_end)} · ${s.language}` }),
     ),
-    el("a", { class: "chip", href: s.jump_url, text: "Open in WhatsApp" }),
     el(
       "details",
       {},

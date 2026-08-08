@@ -199,13 +199,6 @@ function memoryRow(m) {
         class: "muted",
         text: `kept ${fmtDate(m.created_at)}${m.last_used_at ? ` · last used ${fmtDate(m.last_used_at)}` : ""}`,
       }),
-      m.source.jump_url
-        ? el(
-            "div",
-            { class: "chips" },
-            el("a", { class: "chip", href: m.source.jump_url, text: "Open in WhatsApp" }),
-          )
-        : null,
     ),
     el(
       "details",
