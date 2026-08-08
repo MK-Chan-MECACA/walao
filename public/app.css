@@ -990,6 +990,43 @@ details[open] > summary::before {
   font-size: 10.5px;
 }
 
+/* Summary history — items grouped under their section, one label per group.
+   The rail hue is the only thing that varies; lightness and chroma stay put so
+   six sections still read as one palette. */
+.sec {
+  --sec-h: 152;
+  padding-left: var(--space-3);
+  border-left: 2px solid oklch(0.72 0.13 var(--sec-h));
+}
+
+.sec-action_items { --sec-h: 32; }
+.sec-open_questions { --sec-h: 78; }
+.sec-decisions { --sec-h: 152; }
+.sec-highlights { --sec-h: 248; }
+.sec-dates { --sec-h: 305; }
+.sec-memory_candidates { --sec-h: 205; }
+
+.sec-label {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: oklch(0.78 0.1 var(--sec-h));
+}
+
+.sec-item {
+  margin: var(--space-2) 0 0;
+  font-size: 13px;
+}
+
+/* A section with several items needs the items told apart too — the rule is
+   lighter than the section rail, so grouping still wins the eye. */
+.sec-item + .sec-item {
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--color-divider);
+}
+
 /* Ask stages — the run names where it is instead of showing an empty page. */
 .steps {
   list-style: none;

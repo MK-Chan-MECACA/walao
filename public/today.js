@@ -582,11 +582,22 @@ function renderHistory() {
 }
 
 function historyRow(s) {
-  const items = SECTIONS.flatMap(([key, label]) =>
-    (s.payload[key] ?? []).map((it) =>
-      el("p", { class: "source" }, el("span", { class: "muted", text: label }), el("span", { text: it.text })),
-    ),
-  );
+  // One block per section instead of a label on every line — five rows saying
+  // "Highlights" read as one wall of text. The hue rail carries the section.
+  let count = 0;
+  const items = SECTIONS.flatMap(([key, label]) => {
+    const list = s.payload[key] ?? [];
+    count += list.length;
+    if (!list.length) return [];
+    return [
+      el(
+        "div",
+        { class: `sec sec-${key}` },
+        el("span", { class: "sec-label", text: `${label} · ${list.length}` }),
+        ...list.map((it) => el("p", { class: "sec-item", text: it.text })),
+      ),
+    ];
+  });
   return el(
     "li",
     {},
@@ -599,7 +610,7 @@ function historyRow(s) {
     el(
       "details",
       {},
-      el("summary", { text: `${items.length} item(s)` }),
+      el("summary", { text: `${count} item(s)` }),
       el("div", { class: "sources" }, ...items),
     ),
   );
