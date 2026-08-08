@@ -23,6 +23,9 @@
           <textarea id="q" rows="3" maxlength="1000" required placeholder="Who owes the deposit for the Penang order?"></textarea>
           <button type="submit" id="go">Ask</button>
         </form>
+        <!-- The wait is the pipeline: retrieve, rank, answer, check citations.
+             Naming the stage the run is in beats an empty page. -->
+        <ol id="steps" class="steps" hidden></ol>
         <p id="error" class="error" hidden></p>
       </section>
 

@@ -25,16 +25,52 @@ Promise.all([api("GET", "/v1/groups"), api("GET", "/v1/summaries")])
     $("scope").textContent = message(err);
   });
 
+// The stages the server actually runs for one question, in order. The page
+// cannot time them (the API answers once, at the end), so it walks them on a
+// timer and stops on the last until the answer lands.
+// ponytail: client-side pacing, not real progress; stream stages from the
+// server if a run ever gets slow enough that a wrong-looking step misleads.
+const STEPS = [
+  "Reading the Groups you enabled",
+  "Ranking Summaries and Memories against your question",
+  "Claude drafts claims, each citing a source",
+  "Dropping any claim whose citation is not real",
+];
+
+function startSteps() {
+  const list = $("steps");
+  list.hidden = false;
+  list.replaceChildren(...STEPS.map((t) => el("li", { class: "pending", text: t })));
+  let i = 0;
+  const mark = () => {
+    list.children[i].className = "running";
+    if (i > 0) list.children[i - 1].className = "done";
+  };
+  mark();
+  const timer = setInterval(() => {
+    if (i >= STEPS.length - 1) return clearInterval(timer);
+    i += 1;
+    mark();
+  }, 1200);
+  return () => {
+    clearInterval(timer);
+    list.hidden = true;
+  };
+}
+
 $("ask-form").onsubmit = async (e) => {
   e.preventDefault();
   $("error").hidden = true;
+  $("answer").hidden = true;
   $("go").disabled = true;
+  const stopSteps = startSteps();
   try {
     render(await api("POST", "/v1/ask", { question: $("q").value.trim() }));
   } catch (err) {
     $("error").textContent = message(err);
     $("error").hidden = false;
   }
+  stopSteps();
   $("go").disabled = false;
 };
 
