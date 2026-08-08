@@ -8,6 +8,18 @@ const LANGUAGES = [
   ["ms", "Bahasa Melayu"],
 ];
 const HERE = Intl.DateTimeFormat().resolvedOptions().timeZone;
+// §07: the control states what it will do to you, not how often it runs. A
+// Group is either left alone or allowed to interrupt — that is the choice.
+const CADENCES = [
+  ["", "Daily — never messages me"],
+  ["4", "Every 4 hours — may message me"],
+  ["8", "Every 8 hours — may message me"],
+  ["12", "Every 12 hours — may message me"],
+];
+const cadence = (s) =>
+  s.interval_hours
+    ? `every ${s.interval_hours}h — may message you`
+    : `daily at ${s.local_time} ${s.timezone} — never interrupts you`;
 
 let attestation = null;
 let groups = []; // every Group this Session can see, sorted once at load
@@ -160,7 +172,7 @@ function row(g) {
   const label = {
     blocked: "blocked — over your Plan's Group cap, not being read",
     enabled: g.schedule
-      ? `enabled · ${g.schedule.local_time} ${g.schedule.timezone} · ${g.schedule.language}`
+      ? `enabled · ${cadence(g.schedule)} · ${g.schedule.language}`
       : "enabled · no summary time set yet",
     off: "not enabled — WALAO is not reading it",
   }[state];
@@ -218,6 +230,12 @@ function scheduleForm(g) {
       el("option", { value: v, text, selected: (g.schedule?.language ?? "en") === v }),
     ),
   );
+  const now = String(g.schedule?.interval_hours ?? "");
+  const every = el(
+    "select",
+    {},
+    ...CADENCES.map(([v, text]) => el("option", { value: v, text, selected: now === v })),
+  );
   const save = el("button", {
     text: "Save schedule",
     onclick: async () => {
@@ -227,6 +245,7 @@ function scheduleForm(g) {
           local_time: time.value,
           timezone: zone.value,
           language: lang.value,
+          interval_hours: every.value ? Number(every.value) : null,
         });
         load();
       } catch (err) {
@@ -238,11 +257,13 @@ function scheduleForm(g) {
   return el(
     "details",
     {},
-    el("summary", { text: "Summary time" }),
+    el("summary", { text: "Cadence" }),
     el(
       "div",
       { class: "form" },
-      el("label", { text: "Time" }),
+      el("label", { text: "Cadence" }),
+      every,
+      el("label", { text: "Daily time" }),
       time,
       el("label", { text: "Timezone" }),
       zone,

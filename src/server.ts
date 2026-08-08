@@ -78,7 +78,7 @@ async function main(): Promise<void> {
     processSummaryJobs(pool, summarizer, config).catch((err) =>
       console.error("summarize error", err),
     );
-    deliverSummaries(pool).catch((err) => console.error("delivery error", err));
+    deliverSummaries(pool, picker, config).catch((err) => console.error("delivery error", err));
     // Ticket 06: the digest clock writes the day's record for Accounts that
     // never open the web app, and this sends whatever record is due — one
     // message a day, whichever path wrote it.

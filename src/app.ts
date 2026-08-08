@@ -813,6 +813,12 @@ export function createApp(deps: {
           send(res, 400, { error: result === "invalid" ? "invalid_schedule" : "not_enabled" });
           return;
         }
+        // §7 ticket 07: an interrupting cadence is a paid capability, and the
+        // Group is left exactly as it was.
+        if (result === "payment_required") {
+          send(res, 402, { error: "payment_required" });
+          return;
+        }
         send(res, 200, result);
         return;
       }

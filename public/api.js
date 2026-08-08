@@ -58,6 +58,8 @@ const WORDING = {
   plan_limit: "Your Plan's Group limit is already reached. Disable another Group, or upgrade your Plan.",
   not_enabled: "Enable the Group before setting its summary time.",
   invalid_schedule: "That summary time or timezone isn't valid. Use a real timezone like Asia/Kuala_Lumpur.",
+  payment_required:
+    "A Group that can message you needs Pro. On Free, one Group checking every few hours would use up the whole day's Summaries. Keep it daily, or upgrade your Plan.",
   invalid_question: "Ask a question in words — up to 1000 characters.",
   invalid_reminder: "That owner or due date isn't valid.",
   invalid_memory: "A Memory can't be empty.",

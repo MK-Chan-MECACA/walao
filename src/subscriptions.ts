@@ -29,7 +29,14 @@ export type GroupView = {
   // rank test mirrors processingBlock's over_group_cap exactly (block.ts:76):
   // oldest enabled Groups keep working, the ones enabled past the cap do not.
   blocked: boolean;
-  schedule: { local_time: string; timezone: string; language: string } | null;
+  // interval_hours null is the daily cadence: the Group never interrupts, its
+  // items wait for the one daily message (ticket 7).
+  schedule: {
+    local_time: string;
+    timezone: string;
+    language: string;
+    interval_hours: number | null;
+  } | null;
 };
 
 // Groups are tenant-scoped through the session's owning user.
@@ -46,7 +53,7 @@ export async function listGroups(pool: pg.Pool, userId: string): Promise<GroupVi
       `SELECT * FROM (
          SELECT DISTINCT ON (g.external_jid)
                 g.id, g.external_jid, g.name, g.members, g.enabled, g.created_at,
-                sc.local_time, sc.timezone, sc.language,
+                sc.local_time, sc.timezone, sc.language, sc.interval_hours,
                 (SELECT count(DISTINCT o.external_jid)::int FROM groups o
                    JOIN whatsapp_sessions os ON os.id = o.session_id
                   WHERE os.user_id = $1 AND o.enabled AND o.enabled_at < g.enabled_at)
@@ -70,7 +77,12 @@ export async function listGroups(pool: pg.Pool, userId: string): Promise<GroupVi
     enabled: r.enabled,
     blocked: r.enabled && r.enabled_before >= PLANS[plan].max_groups,
     schedule: r.local_time
-      ? { local_time: r.local_time, timezone: r.timezone, language: r.language }
+      ? {
+          local_time: r.local_time,
+          timezone: r.timezone,
+          language: r.language,
+          interval_hours: r.interval_hours,
+        }
       : null,
   }));
 }

@@ -414,7 +414,7 @@ export async function makeHarness(): Promise<Harness> {
     answerer,
     picker,
     summarize: () => processSummaryJobs(pool, summarizer, config),
-    deliver: () => deliverSummaries(pool),
+    deliver: () => deliverSummaries(pool, picker, config),
     digestTick: (now) => tickDigests(pool, picker, config, now),
     digestSend: () => deliverDigests(pool, gateway, config.appUrl),
     async reset() {

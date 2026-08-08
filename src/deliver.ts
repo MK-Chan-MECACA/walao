@@ -57,20 +57,33 @@ function actionSuffix(a: ActionItem): string {
 // respect the Processing Block, mark it delivered) so nothing downstream has to
 // learn a new state; it simply no longer touches the gateway. What the user
 // receives is one digest a day, below.
-export async function deliverSummaries(pool: pg.Pool): Promise<number> {
+//
+// Ticket 07: a Group the Account holder marked as one they cannot afford to
+// miss is the exception. When its window lands a Summary here, the day's pick
+// is recomputed and pushed straight away instead of waiting for the digest
+// hour — and a window holding nothing for them pushes nothing.
+export async function deliverSummaries(
+  pool: pg.Pool,
+  picker: PickerPort,
+  config: Config,
+): Promise<number> {
   let delivered = 0;
   // Summaries whose account is blocked this tick. They stay pending and are
   // simply not re-selected in this loop, so a block can't spin the drain.
   const blocked: string[] = [];
+  // Accounts whose interval Group just produced something. Collected rather
+  // than pushed inline: one re-pick per Account per pass, not per Summary.
+  const pushers = new Set<string>();
   for (;;) {
     const client = await pool.connect();
     try {
       await client.query("BEGIN");
       const { rows } = await client.query(
-        `SELECT s.id, ws.user_id, g.id AS group_id
+        `SELECT s.id, ws.user_id, g.id AS group_id, sc.interval_hours
          FROM summaries s
          JOIN groups g ON g.id = s.group_id
          JOIN whatsapp_sessions ws ON ws.id = g.session_id
+         LEFT JOIN summary_schedules sc ON sc.group_id = g.id
          WHERE s.delivered_at IS NULL AND NOT (s.id = ANY($1::uuid[]))
          ORDER BY s.created_at
          FOR UPDATE OF s SKIP LOCKED
@@ -98,6 +111,7 @@ export async function deliverSummaries(pool: pg.Pool): Promise<number> {
       await client.query(`UPDATE summaries SET delivered_at = now() WHERE id = $1`, [r.id]);
       await client.query("COMMIT");
       delivered++;
+      if (r.interval_hours) pushers.add(r.user_id as string);
     } catch (err) {
       await client.query("ROLLBACK").catch(() => {});
       // Ids only in routine logs — never message content.
@@ -105,6 +119,23 @@ export async function deliverSummaries(pool: pg.Pool): Promise<number> {
       break;
     } finally {
       client.release();
+    }
+  }
+
+  for (const userId of pushers) {
+    try {
+      const brief = await buildTodayBrief(pool, userId);
+      const pick = await pickForToday(pool, picker, config, userId, brief);
+      // Nothing for them in this window is not a quiet message, it is no
+      // message: the day's record keeps whatever timing it already had.
+      if (pick.keys.length === 0) continue;
+      await pool.query(
+        `UPDATE briefs SET due_at = now()
+          WHERE user_id = $1 AND day = $2::date AND delivered_at IS NULL`,
+        [userId, brief.date],
+      );
+    } catch (err) {
+      console.error("interval push failed:", err instanceof Error ? err.message : "error");
     }
   }
   return delivered;
@@ -238,11 +269,17 @@ export async function tickDigests(
     // this tick can never write two rows for what the user calls one day.
     const day = now.toISOString().slice(0, 10);
     const claim = await pool.query(
+      // A record already held back for a quiet day (due_at 'infinity') is armed
+      // here and nowhere else: the hour the Account chose has come, so "nothing
+      // needs you today" is now news rather than an interruption.
       `INSERT INTO briefs (user_id, day, input_hash, headline, item_keys)
-       VALUES ($1, $2::date, '', '', '{}') ON CONFLICT (user_id, day) DO NOTHING`,
+       VALUES ($1, $2::date, '', '', '{}')
+       ON CONFLICT (user_id, day) DO UPDATE SET due_at = now()
+         WHERE briefs.due_at > now()
+       RETURNING (xmax = 0) AS inserted`,
       [r.id, day],
     );
-    if (claim.rowCount === 0) continue; // already recorded today, by either path
+    if (!claim.rows[0]?.inserted) continue; // already recorded today, by either path
     written++;
     // Fills the placeholder in with the real pick. A quiet day never reaches the
     // model and leaves the row empty — which is what "nothing needs you" is.

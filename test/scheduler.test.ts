@@ -47,6 +47,7 @@ test("schedule settable via API for enabled groups only, with validation", async
     local_time: "09:00",
     timezone: "Asia/Kuala_Lumpur",
     language: "zh",
+    interval_hours: null, // daily: the Group never interrupts
   });
 
   // Disabled group: rejected. Other tenant's disabled group id via this token: 404.
@@ -79,6 +80,82 @@ test("schedule settable via API for enabled groups only, with validation", async
     assert.equal(res.status, 400);
     assert.deepEqual(res.body, { error: "invalid_schedule" });
   }
+
+  // Ticket 7: a cadence that isn't a whole number of hours in range is refused
+  // the same way — before the Plan is even consulted.
+  for (const bad of [0, 13, 2.5, "4"]) {
+    const res = await h.api(token, "PUT", `/v1/groups/${groupId}/schedule`, {
+      local_time: "09:00",
+      timezone: "Asia/Kuala_Lumpur",
+      language: "zh",
+      interval_hours: bad,
+    });
+    assert.equal(res.status, 400, String(bad));
+  }
+});
+
+// Ticket 7: the cadence is an interruption budget. Daily leaves the Group alone;
+// an interval lets it close a window every N hours and push what it finds.
+test("an interval Group fires again the same day once its interval has elapsed", async () => {
+  const token = "tok";
+  const { groupId } = await seedTenant(token);
+  await h.pool.query(`UPDATE users SET plan = 'pro'`);
+  const set = await h.api(token, "PUT", `/v1/groups/${groupId}/schedule`, {
+    local_time: "09:00",
+    timezone: "Asia/Kuala_Lumpur",
+    language: "en",
+    interval_hours: 4,
+  });
+  assert.equal(set.status, 200);
+  assert.equal((set.body as { interval_hours: number }).interval_hours, 4);
+
+  // Local time is ignored entirely: 02:00 KL is a window like any other.
+  await h.seedMessage(groupId, "m1", "2026-07-29T17:30:00Z");
+  assert.equal((await tickScheduler(h.pool, T("2026-07-29T18:00:00Z"))).length, 1);
+
+  // Before the interval has elapsed: nothing, even with a fresh message.
+  await h.seedMessage(groupId, "m2", "2026-07-29T19:00:00Z");
+  assert.deepEqual(await tickScheduler(h.pool, T("2026-07-29T21:59:00Z")), []);
+
+  // Once it has: a second window the same local day, tiling from the last close.
+  const second = await tickScheduler(h.pool, T("2026-07-29T22:00:00Z"));
+  assert.equal(second.length, 1);
+  assert.equal(second[0].window_start, "2026-07-29T18:00:00.000Z");
+
+  // A window with nothing in it still closes, and costs no AI call.
+  assert.deepEqual(await tickScheduler(h.pool, T("2026-07-30T02:00:00Z")), []);
+});
+
+test("an interval cadence is refused on Free, and writes no schedule at all", async () => {
+  const token = "tok";
+  const { groupId } = await seedTenant(token);
+
+  const refused = await h.api(token, "PUT", `/v1/groups/${groupId}/schedule`, {
+    local_time: "09:00",
+    timezone: "Asia/Kuala_Lumpur",
+    language: "en",
+    interval_hours: 4,
+  });
+  assert.equal(refused.status, 402);
+  assert.deepEqual(refused.body, { error: "payment_required" });
+
+  // Left exactly as it was: no row, so nothing fires at all.
+  const { rows } = await h.pool.query(`SELECT 1 FROM summary_schedules`);
+  assert.equal(rows.length, 0);
+  await h.seedMessage(groupId, "m1", "2026-07-29T17:30:00Z");
+  assert.deepEqual(await tickScheduler(h.pool, T("2026-07-29T18:00:00Z")), []);
+
+  // Daily on the same Group is not refused — only the interruption is paid for.
+  assert.equal(
+    (
+      await h.api(token, "PUT", `/v1/groups/${groupId}/schedule`, {
+        local_time: "09:00",
+        timezone: "Asia/Kuala_Lumpur",
+        language: "en",
+      })
+    ).status,
+    200,
+  );
 });
 
 test("advancing the clock to the local time emits exactly one job per window", async () => {

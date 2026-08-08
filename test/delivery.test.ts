@@ -230,6 +230,81 @@ test("Tier 0 boundary: the day's message targets the Account's own session only"
   }
 });
 
+// Ticket 7: a Group the Account holder cannot afford to miss pushes its window
+// as soon as it holds something for them — the daily hour is for everything else.
+async function seedIntervalGroup(): Promise<{ userId: string; groupId: string }> {
+  const { userId, groupId } = await seedPickedDay();
+  await h.pool.query(`UPDATE users SET plan = 'pro' WHERE id = $1`, [userId]);
+  assert.equal(
+    (
+      await h.api("tok", "PUT", `/v1/groups/${groupId}/schedule`, {
+        local_time: "09:00",
+        timezone: "UTC",
+        language: "en",
+        interval_hours: 4,
+      })
+    ).status,
+    200,
+  );
+  // The digest hour is hours away — anything that goes out now went out because
+  // the Group pushed it, not because the clock came round.
+  assert.equal(
+    (await h.api("tok", "PUT", "/v1/digest", { digest_time: "23:59", timezone: "UTC" })).status,
+    200,
+  );
+  return { userId, groupId };
+}
+
+test("an interval Group's window pushes the pick without waiting for the digest time", async () => {
+  await seedIntervalGroup();
+
+  assert.equal(await h.deliver(), 1); // the window's Summary lands
+  assert.equal(await h.digestSend(), 1);
+  assert.match(h.gateway.sends[0].text, /Pay the vendor/);
+
+  // And the day's clock has nothing left to send when it does come round.
+  assert.equal(await h.digestTick(at("23:59")), 0);
+  assert.equal(await h.digestSend(), 0);
+  assert.equal(h.gateway.sends.length, 1);
+});
+
+test("an interval window with nothing for the Account holder sends nothing", async () => {
+  await seedIntervalGroup();
+  h.picker.canned = { headline: "", keys: [] }; // candidates exist; none are for them
+
+  assert.equal(await h.deliver(), 1);
+  assert.equal(await h.digestSend(), 0);
+  assert.equal(h.gateway.sends.length, 0);
+
+  // The silence waits for the hour the Account chose, and then says so once.
+  assert.equal(await h.digestTick(at("23:59")), 0); // the record already exists
+  assert.equal(await h.digestSend(), 1);
+  assert.match(h.gateway.sends[0].text, /Nothing needs you today\./);
+});
+
+test("a daily Group's Summary never pushes — its items wait for the daily message", async () => {
+  const { groupId } = await seedPickedDay();
+  assert.equal(
+    (
+      await h.api("tok", "PUT", `/v1/groups/${groupId}/schedule`, {
+        local_time: "09:00",
+        timezone: "UTC",
+        language: "en",
+      })
+    ).status,
+    200,
+  );
+  assert.equal(
+    (await h.api("tok", "PUT", "/v1/digest", { digest_time: "23:59", timezone: "UTC" })).status,
+    200,
+  );
+
+  assert.equal(await h.deliver(), 1);
+  assert.equal(h.picker.calls.length, 0); // no pick is even computed
+  assert.equal(await h.digestSend(), 0);
+  assert.equal(h.gateway.sends.length, 0);
+});
+
 test("from_me echo of the day's message is not ingested or summarized", async () => {
   const { groupId } = await seedPickedDay();
   assert.equal((await h.api("tok", "GET", "/v1/briefs/today")).status, 200);

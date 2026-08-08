@@ -691,7 +691,7 @@ test("the Groups list carries each Group's schedule and which Groups the cap has
   const onPro = (await h.api("grp-1", "GET", "/v1/groups")).body as any;
   assert.deepEqual(
     onPro.groups[0].schedule,
-    { local_time: "18:30", timezone: "Asia/Kuala_Lumpur", language: "ms" },
+    { local_time: "18:30", timezone: "Asia/Kuala_Lumpur", language: "ms", interval_hours: null },
     "the screen shows the schedule it is editing, not an empty form",
   );
   assert.equal(onPro.groups[1].schedule, null);

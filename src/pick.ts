@@ -178,17 +178,26 @@ export async function pickForToday(
   const pick = validatePick(result.output, new Set(candidates.map((c) => c.key)));
 
   // A re-pick replaces the day's row, and clears delivered_at only when the
-  // picked keys actually changed — otherwise a refresh after ticket 06's
-  // message has gone out would cause a second one.
+  // picked keys actually changed into something worth a message — otherwise a
+  // refresh after ticket 06's message has gone out would cause a second one,
+  // and a day whose items were all cleared would re-announce its own silence.
+  //
+  // due_at is set on the insert only (ticket 7): a pick with something in it is
+  // due the moment it exists, an empty one waits for the digest clock to say
+  // "nothing needs you today" at the hour the Account chose. On a row that
+  // already exists, whoever wrote it owns its timing — a pushing Group pulls it
+  // forward itself, and the clock arms it when the hour comes.
   await pool.query(
-    `INSERT INTO briefs (user_id, day, input_hash, headline, item_keys)
-     VALUES ($1, $2::date, $3, $4, $5)
+    `INSERT INTO briefs (user_id, day, input_hash, headline, item_keys, due_at)
+     VALUES ($1, $2::date, $3, $4, $5,
+             CASE WHEN $5::text[] = '{}' THEN 'infinity' ELSE now() END)
      ON CONFLICT (user_id, day) DO UPDATE SET
        input_hash   = EXCLUDED.input_hash,
        headline     = EXCLUDED.headline,
        item_keys    = EXCLUDED.item_keys,
        created_at   = now(),
-       delivered_at = CASE WHEN briefs.item_keys = EXCLUDED.item_keys
+       delivered_at = CASE WHEN EXCLUDED.item_keys = '{}'
+                             OR briefs.item_keys = EXCLUDED.item_keys
                            THEN briefs.delivered_at ELSE NULL END`,
     [userId, brief.date, hash, pick.headline, pick.keys],
   );

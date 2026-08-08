@@ -1,17 +1,28 @@
 import type pg from "pg";
 import { processingBlock } from "./block.ts";
+import { getPlan } from "./billing.ts";
 
 export const LANGUAGES = ["zh", "en", "ms"] as const;
 export type Language = (typeof LANGUAGES)[number];
+
+// Ticket 7: how often a Group's window closes, and — the part the user is
+// actually choosing — whether it is allowed to interrupt them. null is daily.
+export const MAX_INTERVAL_HOURS = 12;
 
 export type Schedule = {
   group_id: string;
   local_time: string;
   timezone: string;
   language: Language;
+  interval_hours: number | null;
 };
 
-export type SetScheduleResult = Schedule | "not_found" | "not_enabled" | "invalid";
+export type SetScheduleResult =
+  | Schedule
+  | "not_found"
+  | "not_enabled"
+  | "invalid"
+  | "payment_required";
 
 // Schedules are settable for enabled groups only; the tenant boundary is the
 // same session join used everywhere else. Upsert keeps last_fired_at, so
@@ -31,6 +42,13 @@ export async function setSchedule(
   if (typeof language !== "string" || !(LANGUAGES as readonly string[]).includes(language)) {
     return "invalid";
   }
+  const interval = b.interval_hours ?? null;
+  if (
+    interval !== null &&
+    (!Number.isInteger(interval) || (interval as number) < 1 || (interval as number) > MAX_INTERVAL_HOURS)
+  ) {
+    return "invalid";
+  }
 
   const { rows } = await pool.query(
     `SELECT g.enabled FROM groups g
@@ -40,17 +58,29 @@ export async function setSchedule(
   );
   if (rows.length === 0) return "not_found";
   if (!rows[0].enabled) return "not_enabled";
+  // Refused rather than silently capped, and refused before anything is
+  // written: a setting that says "every four hours" while quietly firing once
+  // is worse than not offering it. Free's five Summaries a day cannot cover
+  // one Group's six windows, let alone the rest of the Account's.
+  if (interval !== null && (await getPlan(pool, userId)) === "free") return "payment_required";
 
   await pool.query(
-    `INSERT INTO summary_schedules (group_id, local_time, timezone, language)
-     VALUES ($1, $2, $3, $4)
+    `INSERT INTO summary_schedules (group_id, local_time, timezone, language, interval_hours)
+     VALUES ($1, $2, $3, $4, $5)
      ON CONFLICT (group_id) DO UPDATE
-       SET local_time = EXCLUDED.local_time,
-           timezone   = EXCLUDED.timezone,
-           language   = EXCLUDED.language`,
-    [groupId, localTime, timezone, language],
+       SET local_time     = EXCLUDED.local_time,
+           timezone       = EXCLUDED.timezone,
+           language       = EXCLUDED.language,
+           interval_hours = EXCLUDED.interval_hours`,
+    [groupId, localTime, timezone, language, interval],
   );
-  return { group_id: groupId, local_time: localTime, timezone, language: language as Language };
+  return {
+    group_id: groupId,
+    local_time: localTime,
+    timezone,
+    language: language as Language,
+    interval_hours: interval as number | null,
+  };
 }
 
 export function isValidTimeZone(tz: string): boolean {
@@ -98,9 +128,14 @@ export type SummaryJob = {
 // A due-but-quiet window (no new messages) closes without emitting a job — no
 // AI cost — and the next window starts where this one ended. Disabled groups
 // are re-checked at fire time, so disabling also silences an existing schedule.
+//
+// A Group on an interval (ticket 7) ignores local time entirely and compares
+// elapsed duration instead, so it fires several times a day by design — DST is
+// irrelevant to it for the same reason.
 export async function tickScheduler(pool: pg.Pool, now: Date = new Date()): Promise<SummaryJob[]> {
   const { rows } = await pool.query(
-    `SELECT s.group_id, s.local_time, s.timezone, s.language, s.last_fired_at, ws.user_id
+    `SELECT s.group_id, s.local_time, s.timezone, s.language, s.last_fired_at,
+            s.interval_hours, ws.user_id
      FROM summary_schedules s
      JOIN groups g ON g.id = s.group_id
      JOIN whatsapp_sessions ws ON ws.id = g.session_id
@@ -113,10 +148,15 @@ export async function tickScheduler(pool: pg.Pool, now: Date = new Date()): Prom
     // block postpones the window rather than consuming it.
     if (await processingBlock(pool, r.user_id, { groupId: r.group_id, stage: "schedule" }))
       continue;
-    const { date, time } = localParts(now, r.timezone);
-    if (time < r.local_time) continue;
-    if (r.last_fired_at && localParts(new Date(r.last_fired_at), r.timezone).date === date) {
-      continue;
+    if (r.interval_hours) {
+      const elapsed = now.getTime() - new Date(r.last_fired_at ?? 0).getTime();
+      if (r.last_fired_at && elapsed < r.interval_hours * 3600_000) continue;
+    } else {
+      const { date, time } = localParts(now, r.timezone);
+      if (time < r.local_time) continue;
+      if (r.last_fired_at && localParts(new Date(r.last_fired_at), r.timezone).date === date) {
+        continue;
+      }
     }
 
     // First-ever window covers everything stored so far; after that, windows
