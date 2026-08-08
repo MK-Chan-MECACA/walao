@@ -1,9 +1,10 @@
 import type pg from "pg";
-import type { GatewayPort } from "./gateway/port.ts";
+import type { GatewayPort, SelfIdentity } from "./gateway/port.ts";
 import type { Config } from "./config.ts";
 import { encrypt } from "./crypto.ts";
 import { accountKey } from "./accounts.ts";
 import { closeGap, openGap, processingBlock } from "./block.ts";
+import { mentionsSelf } from "./sender-names.ts";
 
 // Drain the durable queue: pick pending events (locked so concurrent/​restarted
 // consumers don't double-process), normalize via the gateway port, encrypt the
@@ -68,11 +69,17 @@ async function processEvent(
   // Resolve session -> owning user (tenant). Unknown session => skip: we can't
   // attribute the message to a tenant, and unattributed data must not be stored.
   const session = await client.query(
-    `SELECT id, user_id FROM whatsapp_sessions WHERE external_session_id = $1`,
+    // The Account holder's own identity (ticket 08) rides this lookup rather
+    // than costing a second round trip on every stored message — and it is the
+    // identity of the Session the message actually arrived on, which is the one
+    // the mention was written against.
+    `SELECT id, user_id, self_phone AS phone, self_lid AS lid, self_name AS name
+       FROM whatsapp_sessions WHERE external_session_id = $1`,
     [evt.sessionExternalId],
   );
   if (session.rows.length === 0) return false;
   const { id: sessionId, user_id: userId } = session.rows[0];
+  const self: SelfIdentity = session.rows[0];
 
   // Store-time consent guard: ingress already drops disabled groups, but an
   // event enqueued while enabled can still be pending when the user disables —
@@ -106,7 +113,8 @@ async function processEvent(
        (user_id, session_id, group_id, external_id, sender_ref, sender_name, sent_at, from_me, body_ciphertext, expires_at)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9,
              now() + make_interval(days => (SELECT retention_days FROM users WHERE id = $1)))
-     ON CONFLICT (session_id, external_id) DO NOTHING`,
+     ON CONFLICT (session_id, external_id) DO NOTHING
+     RETURNING id`,
     [
       userId,
       sessionId,
@@ -119,5 +127,19 @@ async function processEvent(
       ciphertext,
     ],
   );
-  return (res.rowCount ?? 0) > 0;
+  const messageId = res.rows[0]?.id as string | undefined;
+  if (!messageId) return false; // replay: the row was already here, and so is its ping
+
+  // Ticket 08: detection happens here because this is the only point where the
+  // plaintext is already in hand. An Account whose identity the gateway could
+  // not name matches nothing — a guessed ping is worse than a missed one, and
+  // the daily message carries the item either way.
+  if (mentionsSelf(evt.text, self)) {
+    await client.query(
+      `INSERT INTO mention_pings (message_id, user_id) VALUES ($1, $2)
+       ON CONFLICT DO NOTHING`,
+      [messageId, userId],
+    );
+  }
+  return true;
 }

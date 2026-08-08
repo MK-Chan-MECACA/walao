@@ -21,6 +21,7 @@ import {
   type SummarizerResult,
 } from "../src/summarize.ts";
 import { deliverDigests, deliverSummaries, tickDigests } from "../src/deliver.ts";
+import { tickPings } from "../src/pings.ts";
 import type { AnswererInput, AnswererPort, AnswererResult } from "../src/ask.ts";
 import type { PickerInput, PickerPort, PickerResult } from "../src/pick.ts";
 
@@ -196,10 +197,18 @@ export class FakeAnswerer implements AnswererPort {
 export class FakePicker implements PickerPort {
   canned: unknown = { headline: "", keys: [] };
   calls: PickerInput[] = [];
+  // Ticket 08 judges one mention at a time and its key is a message id the test
+  // cannot know before the message is stored, so "yes, this one needs them" has
+  // to be answered by echoing back whatever keys the call was given.
+  echo = false;
+  headline = "";
 
   async pick(input: PickerInput): Promise<PickerResult> {
     this.calls.push(input);
-    return { output: this.canned, model: "fake-model-1", promptVersion: "test-v1" };
+    const output = this.echo
+      ? { headline: this.headline, keys: input.candidates.map((c) => c.key) }
+      : this.canned;
+    return { output, model: "fake-model-1", promptVersion: "test-v1" };
   }
 }
 
@@ -270,6 +279,8 @@ export type Harness = {
   // test can hold one still while it exercises the other.
   digestTick: (now?: Date) => Promise<number>;
   digestSend: () => Promise<number>;
+  // Ticket 08: judge the queued @mentions and ping what survives.
+  pingTick: () => Promise<number>;
   reset: () => Promise<void>;
   close: () => Promise<void>;
 };
@@ -417,6 +428,7 @@ export async function makeHarness(): Promise<Harness> {
     deliver: () => deliverSummaries(pool, picker, config),
     digestTick: (now) => tickDigests(pool, picker, config, now),
     digestSend: () => deliverDigests(pool, gateway, config.appUrl),
+    pingTick: () => tickPings(pool, gateway, picker, config),
     async reset() {
       codes.length = 0;
       gateway.sends = [];
@@ -429,6 +441,8 @@ export async function makeHarness(): Promise<Harness> {
       answerer.calls = [];
       picker.canned = { headline: "", keys: [] };
       picker.calls = [];
+      picker.echo = false;
+      picker.headline = "";
       await pool.query(
         // operator_sessions and rate_limits are per-test state too: a limiter
         // that remembered the previous test would start refusing signups

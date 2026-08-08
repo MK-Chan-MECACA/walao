@@ -6,6 +6,7 @@ import { WaapiGateway } from "./gateway/waapi.ts";
 import { purgeExpired } from "./retention.ts";
 import { tickScheduler } from "./scheduler.ts";
 import { deliverDigests, deliverSummaries, tickDigests } from "./deliver.ts";
+import { tickPings } from "./pings.ts";
 import { processSummaryJobs } from "./summarize.ts";
 import { backfillGroupNames, syncContacts } from "./subscriptions.ts";
 import { evictIdleSessions } from "./connections.ts";
@@ -86,6 +87,10 @@ async function main(): Promise<void> {
     deliverDigests(pool, gateway, config.appUrl).catch((err) =>
       console.error("digest delivery error", err),
     );
+    // Ticket 08: the one interruption. Rides the same tick, so a mention that
+    // genuinely needs the Account holder reaches them in seconds rather than at
+    // the digest hour.
+    tickPings(pool, gateway, picker, config).catch((err) => console.error("ping error", err));
   }, 1000);
   timer.unref();
 
